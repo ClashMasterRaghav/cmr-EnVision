@@ -47,12 +47,12 @@ const App: React.FC = () => {
   useEffect(() => {
     // First time load, show boot screen
     setIsBooting(true);
-    
+
     // Hide boot screen after 3 seconds
     const timer = setTimeout(() => {
       setIsBooting(false);
     }, 3000);
-    
+
     return () => clearTimeout(timer);
   }, []);
 
@@ -69,10 +69,11 @@ const App: React.FC = () => {
           { name: 'Tek It', path: 'videos/samplevideo1.mp4' },
           { name: 'Crystal Dolphine', path: 'videos/samplevideo2.mp4' },
           { name: 'The Old Kanye', path: 'videos/samplevideo3.mp4' }
+          { name: 'vaaron', path: 'videos/samplevideo4.mp4' }
         ];
-        
+
         // Create a video selector function for the video player
-        data = { 
+        data = {
           videoSrc: getAssetPath(availableVideos[0].path),
           availableVideos: availableVideos.map(video => ({
             name: video.name,
@@ -124,7 +125,7 @@ const App: React.FC = () => {
 
     // Get a random spawn position
     const position = spawnPositions[Math.floor(Math.random() * spawnPositions.length)];
-    
+
     addApp({
       type,
       title,
@@ -134,7 +135,7 @@ const App: React.FC = () => {
       isActive: true,
       data
     });
-    
+
     setShowStartMenu(false);
   };
 
@@ -144,7 +145,7 @@ const App: React.FC = () => {
     if (app?.isMinimized) {
       toggleMinimize(id);
     } else {
-    setActiveApp(id);
+      setActiveApp(id);
     }
   };
 
@@ -162,7 +163,7 @@ const App: React.FC = () => {
     const ampm = hours >= 12 ? 'PM' : 'AM';
     const formattedHours = hours % 12 || 12;
     const formattedMinutes = minutes < 10 ? `0${minutes}` : minutes;
-    
+
     return `${formattedHours}:${formattedMinutes} ${ampm}`;
   }
 
@@ -171,7 +172,7 @@ const App: React.FC = () => {
     const interval = setInterval(() => {
       setCurrentTime(getCurrentTime());
     }, 60000);
-    
+
     return () => clearInterval(interval);
   }, []);
 
@@ -187,41 +188,41 @@ const App: React.FC = () => {
     setShutdownAction('restart');
     setShowShutdownDialog(true);
   };
-  
+
   // Handler for power off functionality
   const handlePowerOff = () => {
     setShowStartMenu(false);
     setShutdownAction('poweroff');
     setShowShutdownDialog(true);
   };
-  
+
   // Confirm shutdown action
   const confirmShutdown = () => {
     setShowShutdownDialog(false);
     setIsShuttingDown(true);
-    
+
     // Close all apps for both restart and power off
     apps.forEach(app => {
       removeApp(app.id);
     });
-    
+
     if (shutdownAction === 'restart') {
       // Show shutdown screen for 2 seconds, then blue screen, white screen, then boot
       setTimeout(() => {
         // Show blue screen glitch for 300ms
         setIsShuttingDown(false);
         setIsBlueScreenGlitch(true);
-        
+
         setTimeout(() => {
           // Show white screen for 100ms
           setIsBlueScreenGlitch(false);
           setIsWhiteScreen(true);
-          
+
           setTimeout(() => {
             // Show boot screen for 3 seconds
             setIsWhiteScreen(false);
             setIsBooting(true);
-            
+
             setTimeout(() => {
               setIsBooting(false);
             }, 3000);
@@ -230,7 +231,7 @@ const App: React.FC = () => {
       }, 2000);
     }
   };
-  
+
   // Cancel shutdown
   const cancelShutdown = () => {
     setShowShutdownDialog(false);
@@ -243,8 +244,8 @@ const App: React.FC = () => {
         <div className="shutdown-screen">
           <div className="shutdown-logo"></div>
           <div className="shutdown-message">
-            {shutdownAction === 'restart' 
-              ? "Please wait while your computer restarts..." 
+            {shutdownAction === 'restart'
+              ? "Please wait while your computer restarts..."
               : "It is now safe to turn off your computer"}
           </div>
           <div className="shutdown-progress">
@@ -256,7 +257,7 @@ const App: React.FC = () => {
           </div>
         </div>
       )}
-      
+
       {isBlueScreenGlitch && (
         <div className="bluescreen-glitch">
           <div className="bluescreen-text">
@@ -264,11 +265,11 @@ const App: React.FC = () => {
           </div>
         </div>
       )}
-      
+
       {isWhiteScreen && (
         <div className="white-screen"></div>
       )}
-      
+
       {isBooting && (
         <div className="shutdown-screen">
           <div className="shutdown-logo"></div>
@@ -284,7 +285,7 @@ const App: React.FC = () => {
           </div>
         </div>
       )}
-      
+
       {showShutdownDialog && (
         <div className="xp-dialog-overlay">
           <div className="xp-dialog">
@@ -296,16 +297,16 @@ const App: React.FC = () => {
             </div>
             <div className="xp-dialog-content">
               <div className="xp-dialog-icon">
-                <img 
-                  src={getAssetPath(shutdownAction === 'restart' ? 'images/icons/restart.png' : 'images/icons/poweroff.png')} 
-                  alt={shutdownAction === 'restart' ? "Restart" : "Shut Down"} 
-                  width="48" 
-                  height="48" 
+                <img
+                  src={getAssetPath(shutdownAction === 'restart' ? 'images/icons/restart.png' : 'images/icons/poweroff.png')}
+                  alt={shutdownAction === 'restart' ? "Restart" : "Shut Down"}
+                  width="48"
+                  height="48"
                 />
               </div>
               <div className="xp-dialog-message">
-                {shutdownAction === 'restart' 
-                  ? "Are you sure you want to restart your computer?" 
+                {shutdownAction === 'restart'
+                  ? "Are you sure you want to restart your computer?"
                   : "Are you sure you want to shut down your computer?"}
               </div>
             </div>
@@ -316,10 +317,10 @@ const App: React.FC = () => {
           </div>
         </div>
       )}
-      
+
       {/* Windows XP Environment with app windows */}
-      <VREnvironment 
-        activeAppId={activeAppId} 
+      <VREnvironment
+        activeAppId={activeAppId}
         onWindowClose={removeApp}
         onWindowFocus={handleAppClick}
         desktopIcons={desktopIcons}
@@ -328,8 +329,8 @@ const App: React.FC = () => {
 
       {/* Windows XP Taskbar */}
       <div className="xp-taskbar">
-        <div 
-          className="start-button" 
+        <div
+          className="start-button"
           onClick={(e) => {
             e.stopPropagation();
             setShowStartMenu(!showStartMenu);
@@ -338,10 +339,10 @@ const App: React.FC = () => {
           <img src={getAssetPath('images/icons/windows.png')} alt="Start" width="24" height="24" />
           <span>Start</span>
         </div>
-        
+
         <div className="taskbar-apps">
           {apps.map(app => (
-            <div 
+            <div
               key={app.id}
               className={`taskbar-app ${app.id === activeAppId ? 'active' : ''}`}
               onClick={() => handleAppClick(app.id)}
@@ -352,7 +353,7 @@ const App: React.FC = () => {
             </div>
           ))}
         </div>
-        
+
         <div className="taskbar-time">
           {currentTime}
         </div>
@@ -365,25 +366,25 @@ const App: React.FC = () => {
             <img src={getAssetPath('images/icons/profile.png')} alt="User" />
             <span>User</span>
           </div>
-          
+
           <div className="start-menu-items">
             <div className="start-menu-left">
               <div className="start-menu-item" onClick={() => launchApp('myComputer')}>
                 <img src={getAssetPath('images/icons/my_computer.png')} alt="My Computer" width="32" height="32" />
                 <span>My Computer</span>
               </div>
-              
+
               <div className="start-menu-item" onClick={() => launchApp('recycleBin')}>
                 <img src={getAssetPath('images/icons/recyclebin.png')} alt="Recycle Bin" width="32" height="32" />
                 <span>Recycle Bin</span>
               </div>
-              
+
               <div className="start-menu-separator" />
-              
+
               {desktopIcons.slice(2).map((icon, index) => (
-                <div 
+                <div
                   key={index}
-                  className="start-menu-item" 
+                  className="start-menu-item"
                   onClick={() => launchApp(icon.type as AppType)}
                 >
                   <img src={getAssetPath(icon.icon)} alt={icon.title} width="32" height="32" />
@@ -391,25 +392,25 @@ const App: React.FC = () => {
                 </div>
               ))}
             </div>
-            
+
             <div className="start-menu-right">
               <div className="start-menu-item">
                 <img src={getAssetPath('images/icons/windows.png')} alt="Control Panel" width="32" height="32" />
                 <span>Control Panel</span>
               </div>
-              
+
               <div className="start-menu-item">
                 <img src={getAssetPath('images/icons/question_mark.png')} alt="Help" width="32" height="32" />
                 <span>Help and Support</span>
               </div>
-              
+
               <div className="start-menu-separator" />
-              
+
               <div className="start-menu-item" onClick={handleRestart}>
                 <img src={getAssetPath('images/icons/restart.png')} alt="Restart" width="32" height="32" />
                 <span>Restart</span>
               </div>
-              
+
               <div className="start-menu-item" onClick={handlePowerOff}>
                 <img src={getAssetPath('images/icons/poweroff.png')} alt="Power Off" width="32" height="32" />
                 <span>Power Off</span>

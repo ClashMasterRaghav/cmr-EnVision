@@ -620,6 +620,7 @@ export function getVideoPlayerHtml(screenId = '0') {
                     <option value="videos/samplevideo1.mp4" selected>Tek It</option>
                     <option value="videos/samplevideo2.mp4">Crystal Dolphin</option>
                     <option value="videos/samplevideo3.mp4">The Old Kanye</option>
+                    <option value="videos/samplevideo4.mp4">vaaron</option>
                     <option value="textures/sintel.mp4">Sintel Movie</option>
                 </select>
             </div>
