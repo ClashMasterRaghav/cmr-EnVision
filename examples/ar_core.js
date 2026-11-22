@@ -231,6 +231,7 @@ function initAREnvironment() {
 
     // Initialise hand tracking (optionalFeature — graceful no-op if unsupported)
     window.__arCamera = camera;
+    window.__arRenderer = renderer;
     initHandTracking(controlPanel, renderer, scene, camera);
 
     // Start the unified render loop (render() does everything — no separate animate())
@@ -270,99 +271,17 @@ export function render(timestamp, frame) {
     // ── AR mode flag ─────────────────────────────────────────────────────────
     isARMode = renderer.xr.isPresenting;
 
-    // ── Hand tracking update (every frame: supports both WebXR XRHand and MediaPipe Hand Cam) ──
-    updateHands(frame);
-    // Handle screen placement or movement with controller
-    if ((isPlacingScreen && newScreen) || (isMovingScreen && selectedScreen)) {
-        const target = isPlacingScreen ? newScreen : selectedScreen;
-        
-        // Get controller position and direction
-        const tempMatrix = new THREE.Matrix4();
-        tempMatrix.identity().extractRotation(controller.matrixWorld);
-        const position = new THREE.Vector3();
-        position.setFromMatrixPosition(controller.matrixWorld);
-        const direction = new THREE.Vector3(0, 0, -1).applyMatrix4(tempMatrix);
-        
-        // Set position in front of controller
-        const targetPosition = position.clone().addScaledVector(direction, 0.8);
-        target.position.copy(targetPosition);
-        
-        // Make screen face the user
-        target.lookAt(camera.position);
-    }
-    
-    // Handle screen rotation with controller
-    if (isRotateModeActive && selectedScreen) {
-        // Get controller movement and rotation
-        const tempMatrix = new THREE.Matrix4();
-        tempMatrix.identity().extractRotation(controller.matrixWorld);
-        
-        // Extract controller orientation
-        const controllerDirection = new THREE.Vector3(0, 0, -1).applyMatrix4(tempMatrix);
-        
-        // Get controller quaternion
-        const controllerQuaternion = new THREE.Quaternion().setFromRotationMatrix(tempMatrix);
-        
-        // Get controller Euler angles
-        const controllerEuler = new THREE.Euler().setFromQuaternion(controllerQuaternion);
-        
-        // Extract rotation values with sensitivity adjustment
-        const xRotation = controllerEuler.x * 0.5; // Pitch
-        const yRotation = controllerEuler.y * 0.5; // Yaw
-        
-        // Apply smooth rotation
-        selectedScreen.rotation.x = THREE.MathUtils.lerp(
-            selectedScreen.rotation.x,
-            xRotation, 
-            0.1
-        );
-        
-        selectedScreen.rotation.y = THREE.MathUtils.lerp(
-            selectedScreen.rotation.y,
-            yRotation, 
-            0.1
-        );
-        
-        // Optional: add subtle rotation based on controller movement for fine-tuning
-        selectedScreen.rotation.y += controllerDirection.x * 0.01;
-        selectedScreen.rotation.x += controllerDirection.y * 0.01;
-        
-        // Limit rotation angles to avoid extreme angles
-        selectedScreen.rotation.x = THREE.MathUtils.clamp(
-            selectedScreen.rotation.x,
-            -Math.PI / 2,  // Limit to 90 degrees up
-            Math.PI / 2    // Limit to 90 degrees down
-        );
-    }
-    
-    // Handle screen movement if move mode is active
-    if (isMoveModeActive && selectedScreen) {
-        // Check if controller trigger/button is pressed
-        if (controller.userData && controller.userData.isSelecting) {
-            // Get controller position and direction
-            const tempMatrix = new THREE.Matrix4();
-            tempMatrix.identity().extractRotation(controller.matrixWorld);
-            const position = new THREE.Vector3();
-            position.setFromMatrixPosition(controller.matrixWorld);
-            const direction = new THREE.Vector3(0, 0, -1).applyMatrix4(tempMatrix);
-            
-            // Set position with slight lag for smoother movement
-            const targetPosition = position.clone().addScaledVector(direction, 0.8);
-            selectedScreen.position.lerp(targetPosition, 0.85);
-        }
-    }
-    
-    // Note: Previously, setupControlPanel() was called here on camera movement,
-    // causing the panel to slide on its own and get lost below the view.
-    // The panel position is now stable or anchored via hand tracking (ar_hands.js) / manual dragging.
-    
-    // 1. Render WebGL scene first — updates the WebXR camera pose from ARCore tracking for the current frame
+    // 1. Render WebGL scene FIRST — this calls renderer.xr.updateCamera(camera) and copies
+    //    ARCore's true projectionMatrix & pose into camera (fixing cameraXR.projectionMatrixInverse)!
     renderer.render(scene, camera);
 
-    // 2. Update screen visual effects (rock-solid, no wave)
+    // 2. Run hand tracking & raycasting AFTER renderer.render() so camera has the exact ARCore projectionMatrixInverse!
+    updateHands(frame);
+
+    // 3. Update screen visual effects (rock-solid, no wave)
     updateScreenEffects();
 
-    // 3. Synchronize all CSS3D app positions using the fresh camera pose and render CSS3D in exact lockstep
+    // 4. Synchronize all CSS3D app positions using the fresh camera pose and render CSS3D in exact lockstep
     syncAllCSS3DScreens();
     updateCSS3DRenderer();
 }

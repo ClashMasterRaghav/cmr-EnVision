@@ -49,6 +49,21 @@ let videoControlFunctions = {
     toggleMute: null
 };
 
+// Helper to get the active camera with a valid projectionMatrixInverse (fixes Three.js r175 single-view AR bug!)
+function getActiveRaycastCamera() {
+    if (renderer && renderer.xr && renderer.xr.isPresenting) {
+        const xrCam = renderer.xr.getCamera();
+        if (xrCam && xrCam.cameras && xrCam.cameras.length > 0) {
+            return xrCam.cameras[0];
+        }
+        if (xrCam) {
+            xrCam.projectionMatrixInverse.copy(xrCam.projectionMatrix).invert();
+            return xrCam;
+        }
+    }
+    camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
+    return camera;
+}
 // Setup event listeners
 export function setupEventListeners() {
     // Controller events
@@ -267,6 +282,12 @@ function handleButtonAction(button) {
                 controlPanel.position.set(0, -9999, 0);
                 const btn = document.getElementById('summonPanelBtn');
                 if (btn) btn.innerHTML = '<span style="font-size: 15px;">🖐️</span><span>Menu</span>';
+            }
+            break;
+
+        case 'closeSingleScreen':
+            if (button.userData.targetScreen) {
+                removeScreen(button.userData.targetScreen);
             }
             break;
 
@@ -684,8 +705,9 @@ function onTouchStart(event) {
 
     console.log("Touch position:", initialTouchPosition.x.toFixed(3), initialTouchPosition.y.toFixed(3));
 
-    // Update raycaster
-    raycaster.setFromCamera(initialTouchPosition, camera);
+    // Update raycaster using active WebXR sub-camera (with valid projectionMatrixInverse!)
+    const activeCam = getActiveRaycastCamera();
+    raycaster.setFromCamera(initialTouchPosition, activeCam);
 
     // Double tap detection
     const now = performance.now();
@@ -1014,8 +1036,9 @@ function onTouchMove(event) {
     currentTouchPosition.y = -(touch.clientY / window.innerHeight) * 2 + 1;
 
     // Handle control panel dragging with smooth plane raycasting
+    const activeCam = getActiveRaycastCamera();
     if (isPanelBeingDragged && controlPanel) {
-        raycaster.setFromCamera(currentTouchPosition, camera);
+        raycaster.setFromCamera(currentTouchPosition, activeCam);
         const planeHit = new THREE.Vector3();
         if (raycaster.ray.intersectPlane(panelDragPlane, planeHit)) {
             const targetPos = planeHit.sub(panelDragOffset);
@@ -1033,7 +1056,7 @@ function onTouchMove(event) {
             if (draggedScreen.userData && draggedScreen.userData.originalScale) {
                 draggedScreen.scale.copy(draggedScreen.userData.originalScale);
             }
-            raycaster.setFromCamera(currentTouchPosition, camera);
+            raycaster.setFromCamera(currentTouchPosition, activeCam);
             const planeHit = new THREE.Vector3();
             if (raycaster.ray.intersectPlane(screenDragPlane, planeHit)) {
                 const targetPos = planeHit.sub(dragOffset);

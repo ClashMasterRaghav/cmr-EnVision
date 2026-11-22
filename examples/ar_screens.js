@@ -57,8 +57,10 @@ export function initCSS3DRenderer() {
 // Update CSS3D Renderer - called every frame in render loop
 export function updateCSS3DRenderer() {
     if (css3dRenderer && css3dScene && camera) {
+        // Use the sub-camera cameraL (or main camera with updated projectionMatrixInverse) so CSS3D aligns 1:1
         camera.updateMatrixWorld(true);
         camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
+        camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
         css3dRenderer.render(css3dScene, camera);
     }
 }
@@ -300,6 +302,36 @@ export function createAppScreen(position, size, title, appHtmlGen, accentColor, 
         screen: screenGroup
     };
     screenGroup.add(dragHandle);
+
+    // 2b. 3D Close Button Hitbox aligned directly over the red [×] button on the top-right corner
+    //     so pointing your finger or pinching at the [×] closes this specific app window!
+    const closeBtnWidth  = 0.065; // Generous 6.5cm width for easy hand-pointing accuracy
+    const closeBtnHeight = 0.055; // Generous 5.5cm height at top-right corner
+    const closeBtnGeo = new THREE.PlaneGeometry(closeBtnWidth, closeBtnHeight);
+    const closeBtnMat = new THREE.MeshBasicMaterial({
+        color: 0xff3b30,
+        transparent: true,
+        opacity: 0.0, // Invisible by default; glows subtle red when hand cursor hovers over it
+        side: THREE.DoubleSide,
+        depthWrite: false
+    });
+    const closeBtnMesh = new THREE.Mesh(closeBtnGeo, closeBtnMat);
+    closeBtnMesh.position.set(
+        screenWidth / 2 - closeBtnWidth / 2,
+        screenHeight / 2 - closeBtnHeight / 2,
+        0.006 // Slightly in front of dragHandle so raycaster hits close button first
+    );
+    closeBtnMesh.renderOrder = 2100;
+    closeBtnMesh.userData = {
+        type: 'button',
+        action: 'closeSingleScreen',
+        screenType: 'Close',
+        targetScreen: screenGroup,
+        hoverColor: new THREE.Color(0xff3b30),
+        originalColor: new THREE.Color(0xff3b30),
+        isCloseHitbox: true
+    };
+    screenGroup.add(closeBtnMesh);
 
     // Set up userData on the group
     screenGroup.userData = {

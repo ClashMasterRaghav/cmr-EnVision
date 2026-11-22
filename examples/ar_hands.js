@@ -21,83 +21,83 @@ let handsSupported = false;
 const trackedHands = new Map(); // handedness → XRInputSource
 
 let _controlPanel = null;
-let _renderer     = null;
-let _scene        = null;
-let _camera       = null;
-let panelVisible  = false;
-let panelLocked   = false;
+let _renderer = null;
+let _scene = null;
+let _camera = null;
+let panelVisible = false;
+let panelLocked = false;
 
 // Gesture hold timers (longer intentional hold so the Control Panel doesn't open accidentally)
 let openPalmStartTime = 0;
-let fistStartTime     = 0;
-let lastGestureTime   = 0;
-const OPEN_PALM_HOLD_MS   = 1150; // Hold full open palm for ~1.15s to summon menu intentionally
-const FIST_HOLD_MS        = 900;  // Hold closed fist for ~0.9s to close menu
+let fistStartTime = 0;
+let lastGestureTime = 0;
+const OPEN_PALM_HOLD_MS = 1150; // Hold full open palm for ~1.15s to summon menu intentionally
+const FIST_HOLD_MS = 900;  // Hold closed fist for ~0.9s to close menu
 const GESTURE_COOLDOWN_MS = 2200; // 2.2s cooldown between gesture toggles
 
 // Hover / Dwell & Pinch interaction state
-let hoveredButton       = null;
-let hoverStartTime      = 0;
-const DWELL_CLICK_MS    = 1350; // Hold cursor on app icon for ~1.35s to launch hands-free
-let wasPinching         = false;
-let lastClickTime       = 0;
+let hoveredButton = null;
+let hoverStartTime = 0;
+const DWELL_CLICK_MS = 1350; // Hold cursor on app icon for ~1.35s to launch hands-free
+let wasPinching = false;
+let lastClickTime = 0;
 const CLICK_COOLDOWN_MS = 1000;
 
 // Pinch-to-drag screen state (supports 3D X/Y movement + Z depth push/pull based on hand size!)
-let pinchedScreen       = null;
+let pinchedScreen = null;
 let _pinchInitialPalmSize = 0;
 let _pinchInitialScreenDist = 1.5;
-let _currentPalmSize    = 0.1;
-const _pinchDragPlane   = new THREE.Plane();
-const _pinchDragOffset  = new THREE.Vector3();
+let _currentPalmSize = 0.1;
+const _pinchDragPlane = new THREE.Plane();
+const _pinchDragOffset = new THREE.Vector3();
 
 // Raycaster & reusable math objects
 const _handRaycaster = new THREE.Raycaster();
-const _palmCenter    = new THREE.Vector3();
-const _tipPos        = new THREE.Vector3();
-const _thumbPos      = new THREE.Vector3();
-const _indexBasePos  = new THREE.Vector3();
-const _rayDir        = new THREE.Vector3();
-const _panelTarget   = new THREE.Vector3();
-const _smoothedNdc   = new THREE.Vector2(0, 0);
+const _palmCenter = new THREE.Vector3();
+const _tipPos = new THREE.Vector3();
+const _thumbPos = new THREE.Vector3();
+const _indexBasePos = new THREE.Vector3();
+const _rayDir = new THREE.Vector3();
+const _panelTarget = new THREE.Vector3();
+const _smoothedNdc = new THREE.Vector2(0, 0);
 
 // 3D Hand Cursor & Laser Visuals (for WebXR 3D space)
 let _cursorGroup3D = null;
-let _cursorRing3D  = null;
-let _laserLine3D   = null;
+let _cursorRing3D = null;
+let _laserLine3D = null;
 
 // DOM Virtual Hand Cursor & MediaPipe HUD Elements
-let _domCursor      = null;
-let _domCursorRing  = null;
+let _domCursor = null;
+let _domCursorRing = null;
 let _domCursorLabel = null;
-let _camPreviewBox  = null;
-let _camVideo       = null;
-let _camCanvas      = null;
-let _camCtx         = null;
-let _gestureBadge   = null;
-let _camToggleBtn   = null;
+let _camPreviewBox = null;
+let _camVideo = null;
+let _camCanvas = null;
+let _camCtx = null;
+let _gestureBadge = null;
+let _camToggleBtn = null;
 
 // Offscreen 2D canvas used to rasterize mobile camera frames before feeding MediaPipe
-let _feedCanvas     = null;
-let _feedCtx        = null;
+let _feedCanvas = null;
+let _feedCtx = null;
 
 // MediaPipe HandLandmarker state
 const isMobileDevice = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
 let _mpHandLandmarker = null;
-let _mpLoading        = false;
-let _mpActive         = false;
-let _mpStream         = null;
+let _mpLoading = false;
+let _mpActive = false;
+let _mpStream = null;
 // On mobile phones, default to rear camera ('environment') so users can hold their hand in front of the phone in AR
-let _mpFacingMode     = isMobileDevice ? 'environment' : 'user';
-let _lastDetectMs     = 0;
-let _mpDetectCounter  = 0;
+let _mpFacingMode = isMobileDevice ? 'environment' : 'user';
+let _lastDetectMs = 0;
+let _mpDetectCounter = 0;
 
 // WebXR Raw Camera Access state (for Android ARCore when getUserMedia is hardware-locked)
-let _xrGlBinding      = null;
-let _xrReadFbo        = null;
-let _xrCaptureCanvas  = null;
-let _xrCaptureCtx     = null;
-let _usingXrCamera    = false;
+let _xrGlBinding = null;
+let _xrReadFbo = null;
+let _xrCaptureCanvas = null;
+let _xrCaptureCtx = null;
+let _usingXrCamera = false;
 
 // ─── Joint name constants for WebXR XRHand ────────────────────────────────────
 const FINGERTIPS = [
@@ -124,8 +124,8 @@ const PALM_BASE_JOINTS = [
 export function initHandTracking(controlPanelRef, rendererRef = null, sceneRef = null, cameraRef = null) {
     _controlPanel = controlPanelRef;
     if (rendererRef) _renderer = rendererRef;
-    if (sceneRef)    _scene    = sceneRef;
-    if (cameraRef)   _camera   = cameraRef;
+    if (sceneRef) _scene = sceneRef;
+    if (cameraRef) _camera = cameraRef;
 
     // Attach global helper so buttons and touch gestures can summon panel
     window.summonControlPanelAtCamera = spawnPanelAtCamera;
@@ -150,7 +150,7 @@ export function initHandTracking(controlPanelRef, rendererRef = null, sceneRef =
     }
 
     _renderer.xr.addEventListener('sessionstart', _onSessionStart);
-    _renderer.xr.addEventListener('sessionend',   _onSessionEnd);
+    _renderer.xr.addEventListener('sessionend', _onSessionEnd);
 
     console.log('[hands] Hand tracking & gesture app launcher initialized.');
 }
@@ -226,14 +226,14 @@ export function updateHands(frame) {
     // 2. Process WebXR native XRHand tracking if supported in current XR session
     if (!frame || !handsSupported || !_renderer || !_renderer.xr) return;
 
-    const session  = _renderer.xr.getSession();
+    const session = _renderer.xr.getSession();
     const refSpace = _renderer.xr.getReferenceSpace();
     if (!session || !refSpace) return;
 
-    let anyPalmOpen  = false;
-    let anyFist      = false;
-    let pointerRay   = null;
-    let isPinching   = false;
+    let anyPalmOpen = false;
+    let anyFist = false;
+    let pointerRay = null;
+    let isPinching = false;
 
     for (const source of session.inputSources) {
         if (!source.hand) continue;
@@ -307,7 +307,7 @@ export function unlockPanel() {
     if (_controlPanel) _controlPanel.userData.manuallyPositioned = false;
 }
 
-export function isPanelLocked()           { return panelLocked; }
+export function isPanelLocked() { return panelLocked; }
 export function isHandTrackingSupported() { return handsSupported || _mpActive; }
 
 // ─── Core Raycast & App Launching Logic (Shared by WebXR & MediaPipe) ─────────
@@ -342,9 +342,160 @@ function _findParentButton(obj) {
     return null;
 }
 
-function _processRayInteraction(isPinching, is3DRay = false, rayOrigin = null, rayDir = null) {
-    const now = performance.now();
+/**
+ * Gets the exact rendering camera AND fixes Three.js r175's WebXR single-camera bug where
+ * `cameraXR.projectionMatrixInverse` is never updated in single-view mobile AR!
+ */
+function _getAccurateRenderCamera() {
+    if (_renderer && _renderer.xr && _renderer.xr.isPresenting) {
+        const xrCam = _renderer.xr.getCamera();
+        // In single-view AR (mobile phone), xrCam.cameras[0] (cameraL) has the exact hardware projectionMatrix & inverse
+        if (xrCam && xrCam.cameras && xrCam.cameras.length > 0) {
+            const subCam = xrCam.cameras[0];
+            subCam.projectionMatrixInverse.copy(subCam.projectionMatrix).invert();
+            return subCam;
+        }
+        if (xrCam) {
+            xrCam.projectionMatrixInverse.copy(xrCam.projectionMatrix).invert();
+            return xrCam;
+        }
+    }
     const cam = _camera || window.__arCamera;
+    if (cam) {
+        cam.updateMatrixWorld(true);
+        cam.projectionMatrixInverse.copy(cam.projectionMatrix).invert();
+    }
+    return cam;
+}
+
+/**
+ * Projects every interactive 3D button (Control Panel icons & Screen Close [×] buttons)
+ * into 2D screen pixels [0..innerWidth, 0..innerHeight] using the exact active camera matrix,
+ * and checks if the visual cursor (screenX, screenY) is inside the button's projected screen box!
+ * This guarantees ZERO offset between where the cursor is drawn and where the button hitbox is!
+ */
+const _projCorner1 = new THREE.Vector3();
+const _projCorner2 = new THREE.Vector3();
+const _projCenter  = new THREE.Vector3();
+
+function _findButtonByScreenProjection(buttons, screenX, screenY, cam) {
+    if (!buttons || buttons.length === 0 || !cam) return null;
+
+    const canvasEl = (_renderer && _renderer.domElement) ? _renderer.domElement : null;
+    const rect = canvasEl ? canvasEl.getBoundingClientRect() : { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
+    const viewW = rect.width  || window.innerWidth;
+    const viewH = rect.height || window.innerHeight;
+
+    let bestBtn  = null;
+    let bestDist = Infinity;
+
+    for (let i = 0; i < buttons.length; i++) {
+        const btn = buttons[i];
+        if (!btn || !btn.visible) continue;
+
+        btn.updateMatrixWorld(true);
+        _projCenter.setFromMatrixPosition(btn.matrixWorld);
+
+        // Project 3D button center to NDC [-1..1] using the exact active camera
+        _projCenter.project(cam);
+        // Ignore if behind camera
+        if (_projCenter.z > 1.0 || _projCenter.z < -1.0) continue;
+
+        const btnScreenX = rect.left + ((_projCenter.x + 1) * 0.5) * viewW;
+        const btnScreenY = rect.top  + ((-_projCenter.y + 1) * 0.5) * viewH;
+
+        // Compute the button's true projected radius on screen by projecting its top-right corner
+        let halfW = 0.025;
+        let halfH = 0.025;
+        if (btn.geometry && btn.geometry.parameters) {
+            halfW = (btn.geometry.parameters.width  || 0.036) * 0.5;
+            halfH = (btn.geometry.parameters.height || 0.036) * 0.5;
+        }
+
+        _projCorner1.set(halfW, halfH, 0).applyMatrix4(btn.matrixWorld).project(cam);
+        _projCorner2.set(-halfW, -halfH, 0).applyMatrix4(btn.matrixWorld).project(cam);
+
+        const c1X = rect.left + ((_projCorner1.x + 1) * 0.5) * viewW;
+        const c1Y = rect.top  + ((-_projCorner1.y + 1) * 0.5) * viewH;
+        const c2X = rect.left + ((_projCorner2.x + 1) * 0.5) * viewW;
+        const c2Y = rect.top  + ((-_projCorner2.y + 1) * 0.5) * viewH;
+
+        // Include the label below the icon (+35% height downward) and a small 8px padding
+        const boxHalfW = Math.max(22, Math.abs(c1X - c2X) * 0.5 + 8);
+        const boxHalfH = Math.max(22, Math.abs(c1Y - c2Y) * 0.65 + 8);
+
+        const dx = Math.abs(screenX - btnScreenX);
+        const dy = Math.abs(screenY - (btnScreenY + boxHalfH * 0.12));
+
+        if (dx <= boxHalfW && dy <= boxHalfH) {
+            const dist = Math.hypot(dx, dy);
+            if (dist < bestDist) {
+                bestDist = dist;
+                bestBtn  = btn;
+            }
+        }
+    }
+
+    return bestBtn;
+}
+function _findScreenDOMHit(screenX, screenY) {
+    if (!screens || screens.length === 0) return null;
+
+    // Walk in reverse so frontmost / most recently opened screens take priority
+    for (let i = screens.length - 1; i >= 0; i--) {
+        const s = screens[i];
+        if (!s || !s.userData || !s.userData.css3dObject || !s.userData.css3dObject.element) continue;
+        const iframe = s.userData.css3dObject.element;
+
+        // 1. Check the exact bounding box of the red [×] close button inside the app's iframe
+        try {
+            const doc = iframe.contentDocument || (iframe.contentWindow && iframe.contentWindow.document);
+            if (doc) {
+                const closeBtn = doc.querySelector('.btn-close');
+                if (closeBtn) {
+                    const rect = iframe.getBoundingClientRect();
+                    if (rect.width > 10 && rect.height > 10) {
+                        // Top-right corner of the rendered CSS3D window (generous 48x44px hit zone around the × button)
+                        const hitLeft   = rect.right - Math.max(48, rect.width * 0.085);
+                        const hitRight  = rect.right + 14;
+                        const hitTop    = rect.top - 12;
+                        const hitBottom = rect.top + Math.max(44, rect.height * 0.085);
+
+                        if (screenX >= hitLeft && screenX <= hitRight && screenY >= hitTop && screenY <= hitBottom) {
+                            // Find the 3D close hitbox mesh on this screen so visual highlight works too
+                            const closeMesh = s.children.find(c => c.userData && c.userData.isCloseHitbox);
+                            return { type: 'closeBtn', screen: s, buttonMesh: closeMesh };
+                        }
+                    }
+                }
+            }
+        } catch (e) {}
+
+        // 2. Fallback using the iframe's outer bounding rect on screen
+        const rect = iframe.getBoundingClientRect();
+        if (rect.width > 10 && rect.height > 10) {
+            const hitLeft   = rect.right - Math.max(48, rect.width * 0.085);
+            const hitRight  = rect.right + 14;
+            const hitTop    = rect.top - 12;
+            const hitBottom = rect.top + Math.max(44, rect.height * 0.085);
+
+            if (screenX >= hitLeft && screenX <= hitRight && screenY >= hitTop && screenY <= hitBottom) {
+                const closeMesh = s.children.find(c => c.userData && c.userData.isCloseHitbox);
+                return { type: 'closeBtn', screen: s, buttonMesh: closeMesh };
+            }
+
+            // Check if cursor is on the top titlebar (for pinch-to-drag window)
+            if (screenX >= rect.left && screenX <= rect.right && screenY >= rect.top - 10 && screenY <= rect.top + Math.max(42, rect.height * 0.08)) {
+                return { type: 'titleBar', screen: s };
+            }
+        }
+    }
+    return null;
+}
+
+function _processRayInteraction(isPinching, is3DRay = false, rayOrigin = null, rayDir = null, screenX = null, screenY = null) {
+    const now = performance.now();
+    const cam = _getAccurateRenderCamera();
 
     // 1. Handle active Pinch-Drag on a 3D app window (moves X/Y and pushes/pulls closer/further with hand distance!)
     if (pinchedScreen) {
@@ -379,82 +530,112 @@ function _processRayInteraction(isPinching, is3DRay = false, rayOrigin = null, r
         }
     }
 
-    // 2. Check intersection with Control Panel & Screen buttons
+    // 2. Check intersection with Control Panel & Screen buttons:
+    //    (a) First use 2D Screen-Space Projection matching (`_findButtonByScreenProjection`) so that on mobile phones
+    //        whatever button is visually underneath the glowing hand cursor is matched with ZERO offset!
+    //    (b) Also check 2D DOM hit for CSS3D iframe [×] close button and 3D raycaster fallback.
     const buttons = _getInteractiveButtons();
-    _handRaycaster.params.Mesh.threshold = 0.035;
-    const hits = buttons.length > 0 ? _handRaycaster.intersectObjects(buttons, true) : [];
+    let matchedBtn = null;
+    let hitPoint3D = null;
 
-    if (hits.length > 0) {
-        const hit = hits[0];
-        const btn = _findParentButton(hit.object);
+    if (screenX !== null && screenY !== null && cam) {
+        matchedBtn = _findButtonByScreenProjection(buttons, screenX, screenY, cam);
+    }
 
-        if (is3DRay && _cursorGroup3D) {
+    const domHit = (screenX !== null && screenY !== null) ? _findScreenDOMHit(screenX, screenY) : null;
+    if (!matchedBtn && domHit && domHit.type === 'closeBtn' && domHit.buttonMesh) {
+        matchedBtn = domHit.buttonMesh;
+    }
+
+    if (!matchedBtn && buttons.length > 0) {
+        _handRaycaster.params.Mesh.threshold = 0.025;
+        const hits = _handRaycaster.intersectObjects(buttons, true);
+        if (hits.length > 0) {
+            matchedBtn = _findParentButton(hits[0].object);
+            hitPoint3D = hits[0].point;
+        }
+    }
+
+    if (matchedBtn) {
+        const btn = matchedBtn;
+
+        if (is3DRay && _cursorGroup3D && hitPoint3D) {
             _cursorGroup3D.visible = true;
-            _cursorGroup3D.position.copy(hit.point);
+            _cursorGroup3D.position.copy(hitPoint3D);
             if (cam) {
                 const camWorldPos = new THREE.Vector3();
                 cam.getWorldPosition(camWorldPos);
                 _cursorGroup3D.lookAt(camWorldPos);
             }
             if (_laserLine3D && rayOrigin) {
-                _updateLaserLine(rayOrigin, hit.point);
+                _updateLaserLine(rayOrigin, hitPoint3D);
             }
         }
 
-        if (btn) {
-            if (hoveredButton !== btn) {
-                _clearHoveredButton();
-                hoveredButton = btn;
-                hoverStartTime = now;
-                if (btn.material && btn.userData.hoverColor) {
-                    btn.material.color.copy(btn.userData.hoverColor);
-                }
+        if (hoveredButton !== btn) {
+            _clearHoveredButton();
+            hoveredButton = btn;
+            hoverStartTime = now;
+            if (btn.material && btn.userData.hoverColor) {
+                btn.material.color.copy(btn.userData.hoverColor);
+            }
+            if (btn.userData.isCloseHitbox && btn.material) {
+                btn.material.opacity = 0.35;
+            } else {
                 btn.scale.set(1.18, 1.18, 1.18);
             }
-
-            const dwellElapsed = now - hoverStartTime;
-            const dwellProgress = Math.min(1.0, dwellElapsed / DWELL_CLICK_MS);
-
-            _updateCursorProgress(dwellProgress, btn.userData.screenType || btn.userData.action, isPinching);
-
-            const pinchTriggered = isPinching && !wasPinching;
-            const dwellTriggered = dwellProgress >= 1.0;
-
-            if ((pinchTriggered || dwellTriggered) && (now - lastClickTime > CLICK_COOLDOWN_MS)) {
-                lastClickTime = now;
-                hoverStartTime = now + 500;
-                _triggerButtonByHand(btn, pinchTriggered ? '🤏 Pinch' : '☝️ Hover');
-            }
-
-            wasPinching = isPinching;
-            return;
         }
+
+        const targetDwellMs = btn.userData.isCloseHitbox ? 850 : DWELL_CLICK_MS;
+        const dwellElapsed = now - hoverStartTime;
+        const dwellProgress = Math.min(1.0, dwellElapsed / targetDwellMs);
+
+        _updateCursorProgress(dwellProgress, btn.userData.screenType || btn.userData.action, isPinching);
+
+        const pinchTriggered = isPinching && !wasPinching;
+        const dwellTriggered = dwellProgress >= 1.0;
+
+        if ((pinchTriggered || dwellTriggered) && (now - lastClickTime > CLICK_COOLDOWN_MS)) {
+            lastClickTime = now;
+            hoverStartTime = now + 500;
+            _triggerButtonByHand(btn, pinchTriggered ? '🤏 Pinch' : '☝️ Hover');
+        }
+
+        wasPinching = isPinching;
+        return;
     }
 
     // No button hit — clear hover state
     _clearHoveredButton();
     _updateCursorProgress(0, null, isPinching);
 
-    // 3. Check if user is pinching a screen's top bar to drag it in 3D space
+    // 3. Check if user is pinching a screen's top bar to drag it in 3D space (checks both 3D raycast AND 2D titlebar rect)
     if (isPinching && !wasPinching && screens && screens.length > 0 && cam) {
         const screenHits = _handRaycaster.intersectObjects(screens, true);
+        let targetScreen = null;
+        let hitPt = null;
+
         if (screenHits.length > 0) {
             const hitObj = screenHits[0].object;
-            const targetScreen = (hitObj.userData && hitObj.userData.screen) ? hitObj.userData.screen : null;
-            if (targetScreen) {
-                selectScreen(targetScreen);
-                pinchedScreen = targetScreen;
-                const camWorldPos = new THREE.Vector3();
-                const camWorldQuat = new THREE.Quaternion();
-                cam.getWorldPosition(camWorldPos);
-                cam.getWorldQuaternion(camWorldQuat);
-                _pinchInitialScreenDist = THREE.MathUtils.clamp(targetScreen.position.distanceTo(camWorldPos), 0.55, 3.5);
-                _pinchInitialPalmSize = _currentPalmSize;
-                const camForward = new THREE.Vector3(0, 0, -1).applyQuaternion(camWorldQuat);
-                _pinchDragPlane.setFromNormalAndCoplanarPoint(camForward, screenHits[0].point);
-                _pinchDragOffset.copy(screenHits[0].point).sub(targetScreen.position);
-                createNotification('🤏 Hand Grab: Move hand to drag or pull closer/further', 'info');
-            }
+            targetScreen = (hitObj.userData && hitObj.userData.screen) ? hitObj.userData.screen : null;
+            hitPt = screenHits[0].point;
+        } else if (domHit && domHit.type === 'titleBar' && domHit.screen) {
+            targetScreen = domHit.screen;
+            hitPt = targetScreen.position.clone();
+        }
+
+        if (targetScreen && hitPt) {
+            selectScreen(targetScreen);
+            pinchedScreen = targetScreen;
+            const camWorldPos = new THREE.Vector3();
+            const camWorldQuat = new THREE.Quaternion();
+            cam.getWorldPosition(camWorldPos);
+            cam.getWorldQuaternion(camWorldQuat);
+            _pinchInitialScreenDist = THREE.MathUtils.clamp(targetScreen.position.distanceTo(camWorldPos), 0.55, 3.5);
+            _pinchInitialPalmSize = _currentPalmSize;
+            const camForward = new THREE.Vector3(0, 0, -1).applyQuaternion(camWorldQuat);
+            _pinchDragPlane.setFromNormalAndCoplanarPoint(camForward, hitPt);
+            _pinchDragOffset.copy(hitPt).sub(targetScreen.position);
         }
     }
 
@@ -477,6 +658,9 @@ function _clearHoveredButton() {
     if (hoveredButton) {
         if (hoveredButton.material && hoveredButton.userData.originalColor) {
             hoveredButton.material.color.copy(hoveredButton.userData.originalColor);
+        }
+        if (hoveredButton.userData && hoveredButton.userData.isCloseHitbox && hoveredButton.material) {
+            hoveredButton.material.opacity = 0.0;
         }
         hoveredButton.scale.set(1, 1, 1);
         hoveredButton = null;
@@ -520,6 +704,8 @@ function _triggerButtonByHand(button, methodLabel = '🖐️ Hand') {
         spawnPanelAtCamera(false);
         const niceName = screenType.charAt(0).toUpperCase() + screenType.slice(1);
         createNotification(`${methodLabel}: Opened ${niceName}`, 'success');
+    } else if (action === 'closeSingleScreen' && button.userData.targetScreen) {
+        removeScreen(button.userData.targetScreen);
     } else if (action === 'deleteScreen' || action === 'closeAllScreens') {
         if (screens && screens.length > 0) {
             while (screens.length > 0) {
@@ -661,13 +847,13 @@ async function _acquireCameraStream(preferredFacing) {
 }
 
 // Live Camera Passthrough Background (for Mobile Hand-Cam AR mode when WebXR is not locking the camera)
-let _passthroughVideo   = null;
+let _passthroughVideo = null;
 let _gyroListenerActive = false;
-let _initialAlpha       = null;
-const _ze               = new THREE.Vector3(0, 0, 1);
-const _euler            = new THREE.Euler();
-const _q0               = new THREE.Quaternion();
-const _q1               = new THREE.Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5)); // -PI/2 around X
+let _initialAlpha = null;
+const _ze = new THREE.Vector3(0, 0, 1);
+const _euler = new THREE.Euler();
+const _q0 = new THREE.Quaternion();
+const _q1 = new THREE.Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5)); // -PI/2 around X
 
 function _enableLiveCameraARBackground(stream) {
     if (!_passthroughVideo) {
@@ -698,7 +884,7 @@ function _enableLiveCameraARBackground(stream) {
         _passthroughVideo.srcObject = stream;
         _passthroughVideo.style.transform = _mpFacingMode === 'user' ? 'scaleX(-1)' : 'none';
         _passthroughVideo.style.display = 'block';
-        _passthroughVideo.play().catch(() => {});
+        _passthroughVideo.play().catch(() => { });
         _enableGyroCameraTracking();
     }
 }
@@ -728,7 +914,7 @@ function _enableGyroCameraTracking() {
             if (_initialAlpha === null) _initialAlpha = rawAlpha;
 
             const alpha = THREE.MathUtils.degToRad(rawAlpha - _initialAlpha);
-            const beta  = THREE.MathUtils.degToRad(e.beta  || 0);
+            const beta = THREE.MathUtils.degToRad(e.beta || 0);
             const gamma = THREE.MathUtils.degToRad(e.gamma || 0);
             const orientAngle = (window.screen && window.screen.orientation && window.screen.orientation.angle !== undefined)
                 ? window.screen.orientation.angle
@@ -770,8 +956,8 @@ function _enableGyroCameraTracking() {
             const dy = e.touches[0].clientY - lastLookY;
             lastLookX = e.touches[0].clientX;
             lastLookY = e.touches[0].clientY;
-            manualYaw   += dx * 0.004;
-            manualPitch  = THREE.MathUtils.clamp(manualPitch + dy * 0.004, -1.2, 1.2);
+            manualYaw += dx * 0.004;
+            manualPitch = THREE.MathUtils.clamp(manualPitch + dy * 0.004, -1.2, 1.2);
             _euler.set(manualPitch, manualYaw, 0, 'YXZ');
             cam.quaternion.setFromEuler(_euler);
             cam.updateMatrixWorld(true);
@@ -831,7 +1017,7 @@ async function _toggleHandCamera() {
             _usingXrCamera = false;
         }
 
-        _camCanvas.width  = 160;
+        _camCanvas.width = 160;
         _camCanvas.height = 120;
 
         // On mobile phones outside ARCore, display the live camera feed as full-screen background + enable 3DoF Gyro
@@ -840,7 +1026,7 @@ async function _toggleHandCamera() {
         }
 
         // 3. Now that camera stream is open and playing, download/init MediaPipe HandLandmarker AI
-        if (_gestureBadge) _gestureBadge.textContent = '⏳ Loading Hand AI...';
+        if (_gestureBadge) _gestureBadge.textContent = '⏳ Loading Hand Cam...';
         _updateCamButtonState('⏳ Loading AI...');
         await _initMediaPipeModel();
 
@@ -849,7 +1035,7 @@ async function _toggleHandCamera() {
             _feedCtx = _feedCanvas.getContext('2d', { willReadFrequently: true });
         }
 
-        _mpActive  = true;
+        _mpActive = true;
         _mpLoading = false;
         const camLabel = _mpFacingMode === 'environment' ? 'Rear' : 'Front';
         _updateCamButtonState(`📷 Hand (${camLabel})`, true);
@@ -858,7 +1044,7 @@ async function _toggleHandCamera() {
     } catch (err) {
         console.warn('[hands] MediaPipe Hand Cam error:', err);
         _mpLoading = false;
-        _mpActive  = false;
+        _mpActive = false;
         if (_camPreviewBox) _camPreviewBox.style.display = 'none';
         _updateCamButtonState('📷 Hand Cam');
         createNotification(`Camera error: ${err.message || err.name}. Tap 🔒 in address bar to allow Camera.`, 'warning');
@@ -947,17 +1133,17 @@ async function _flipHandCamera() {
  * Extracts a crisp, properly oriented 2D canvas frame directly from WebXR's raw ARCore camera texture (`view.camera`).
  * Preserves the phone's true portrait/landscape aspect ratio and uses 480p resolution for sharp hand detection!
  */
-let _xrDownsampleFbo  = null;
-let _xrDownsampleTex  = null;
-let _xrLastDstW       = 0;
-let _xrLastDstH       = 0;
-let _xrPixelBuf       = null;
-let _xrRotateCanvas   = null;
-let _xrRotateCtx      = null;
+let _xrDownsampleFbo = null;
+let _xrDownsampleTex = null;
+let _xrLastDstW = 0;
+let _xrLastDstH = 0;
+let _xrPixelBuf = null;
+let _xrRotateCanvas = null;
+let _xrRotateCtx = null;
 
 function _captureWebXRCameraFrame(frame) {
     if (!frame || !_renderer || !_renderer.xr) return null;
-    const session  = _renderer.xr.getSession();
+    const session = _renderer.xr.getSession();
     const refSpace = _renderer.xr.getReferenceSpace();
     if (!session || !refSpace || typeof XRWebGLBinding === 'undefined') return null;
 
@@ -981,20 +1167,20 @@ function _captureWebXRCameraFrame(frame) {
             // Preserve the exact aspect ratio of the ARCore camera texture at ~480px on the long edge
             // (2x higher resolution than before -> 4x more detail for MediaPipe hand detection!)
             const scale = Math.min(1.0, 480 / Math.max(srcW, srcH));
-            const dstW  = Math.max(64, Math.round(srcW * scale));
-            const dstH  = Math.max(64, Math.round(srcH * scale));
+            const dstW = Math.max(64, Math.round(srcW * scale));
+            const dstH = Math.max(64, Math.round(srcH * scale));
 
             if (!_xrCaptureCanvas) {
                 _xrCaptureCanvas = document.createElement('canvas');
                 _xrCaptureCtx = _xrCaptureCanvas.getContext('2d');
             }
-            _xrCaptureCanvas.width  = dstW;
+            _xrCaptureCanvas.width = dstW;
             _xrCaptureCanvas.height = dstH;
 
-            const prevFbo      = gl.getParameter(gl.FRAMEBUFFER_BINDING);
-            const prevReadFbo  = gl.READ_FRAMEBUFFER ? gl.getParameter(gl.READ_FRAMEBUFFER_BINDING) : null;
-            const prevDrawFbo  = gl.DRAW_FRAMEBUFFER ? gl.getParameter(gl.DRAW_FRAMEBUFFER_BINDING) : null;
-            const prevTex      = gl.getParameter(gl.TEXTURE_BINDING_2D);
+            const prevFbo = gl.getParameter(gl.FRAMEBUFFER_BINDING);
+            const prevReadFbo = gl.READ_FRAMEBUFFER ? gl.getParameter(gl.READ_FRAMEBUFFER_BINDING) : null;
+            const prevDrawFbo = gl.DRAW_FRAMEBUFFER ? gl.getParameter(gl.DRAW_FRAMEBUFFER_BINDING) : null;
+            const prevTex = gl.getParameter(gl.TEXTURE_BINDING_2D);
 
             if (!_xrReadFbo) _xrReadFbo = gl.createFramebuffer();
 
@@ -1043,7 +1229,7 @@ function _captureWebXRCameraFrame(frame) {
                         _xrRotateCanvas = document.createElement('canvas');
                         _xrRotateCtx = _xrRotateCanvas.getContext('2d');
                     }
-                    _xrRotateCanvas.width  = dstW;
+                    _xrRotateCanvas.width = dstW;
                     _xrRotateCanvas.height = cropH;
                     _xrRotateCtx.drawImage(_xrCaptureCanvas, 0, cropY, dstW, cropH, 0, 0, dstW, cropH);
                     return _xrRotateCanvas;
@@ -1070,8 +1256,8 @@ function _syncPreviewAspectRatio(srcW, srcH) {
     const clampedRatio = Math.min(1.25, Math.max(0.75, srcH / srcW));
     const boxH = Math.round(boxW * clampedRatio);
     _camPreviewBox.style.width = `${boxW}px`;
-    _videoWrapEl.style.width   = `${boxW}px`;
-    _videoWrapEl.style.height  = `${boxH}px`;
+    _videoWrapEl.style.width = `${boxW}px`;
+    _videoWrapEl.style.height = `${boxH}px`;
 }
 
 function _updateMediaPipeHands(frame = null) {
@@ -1118,7 +1304,7 @@ function _updateMediaPipeHands(frame = null) {
         _syncPreviewAspectRatio(xrFrameCanvas.width, xrFrameCanvas.height);
 
         _feedCanvas = xrFrameCanvas;
-        _camCanvas.width  = xrFrameCanvas.width;
+        _camCanvas.width = xrFrameCanvas.width;
         _camCanvas.height = xrFrameCanvas.height;
         _camCtx.clearRect(0, 0, _camCanvas.width, _camCanvas.height);
         _camCtx.drawImage(xrFrameCanvas, 0, 0, _camCanvas.width, _camCanvas.height);
@@ -1128,7 +1314,7 @@ function _updateMediaPipeHands(frame = null) {
         }
         if (!_camVideo || _camVideo.readyState < 2 || _camVideo.videoWidth === 0) {
             if (_camVideo && _camVideo.paused) {
-                _camVideo.play().catch(() => {});
+                _camVideo.play().catch(() => { });
             }
             return;
         }
@@ -1142,7 +1328,7 @@ function _updateMediaPipeHands(frame = null) {
         _syncPreviewAspectRatio(vw, vh);
 
         const previewScale = Math.min(1.0, 240 / Math.max(vw, vh));
-        _camCanvas.width  = Math.round(vw * previewScale);
+        _camCanvas.width = Math.round(vw * previewScale);
         _camCanvas.height = Math.round(vh * previewScale);
         _camCtx.clearRect(0, 0, _camCanvas.width, _camCanvas.height);
     }
@@ -1236,8 +1422,13 @@ function _updateMediaPipeHands(frame = null) {
     _smoothedNdc.x = THREE.MathUtils.lerp(_smoothedNdc.x, targetNdcX, 0.42);
     _smoothedNdc.y = THREE.MathUtils.lerp(_smoothedNdc.y, targetNdcY, 0.42);
 
-    const screenX = ((_smoothedNdc.x + 1) * 0.5) * window.innerWidth;
-    const screenY = ((-_smoothedNdc.y + 1) * 0.5) * window.innerHeight;
+    const canvasEl = (_renderer && _renderer.domElement) ? _renderer.domElement : null;
+    const rect = canvasEl ? canvasEl.getBoundingClientRect() : { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
+    const viewW = rect.width  || window.innerWidth;
+    const viewH = rect.height || window.innerHeight;
+
+    const screenX = rect.left + ((_smoothedNdc.x + 1) * 0.5) * viewW;
+    const screenY = rect.top  + ((-_smoothedNdc.y + 1) * 0.5) * viewH;
 
     // Position glowing DOM virtual hand cursor
     if (_domCursor) {
@@ -1245,12 +1436,11 @@ function _updateMediaPipeHands(frame = null) {
         _domCursor.style.transform = `translate3d(${screenX}px, ${screenY}px, 0)`;
     }
 
-    // Raycast from camera through smoothed hand cursor into Three.js scene
-    const cam = _camera || window.__arCamera;
+    // Raycast from active WebXR sub-camera (with valid projectionMatrixInverse!) into Three.js scene
+    const cam = _getAccurateRenderCamera();
     if (cam) {
-        cam.updateMatrixWorld(true);
         _handRaycaster.setFromCamera(_smoothedNdc, cam);
-        _processRayInteraction(gestureInfo.isPinching, false);
+        _processRayInteraction(gestureInfo.isPinching, false, null, null, screenX, screenY);
     }
 }
 
@@ -1264,22 +1454,22 @@ function _classifyMediaPipeHand(lm) {
     const isPinching = pinchDist < 0.36;
 
     // Finger extension checks (stricter extension ratio so casual hand movements don't false-trigger Open Palm)
-    const indexExt  = dist2D(lm[8],  lm[0]) > dist2D(lm[6],  lm[0]) * 1.16;
+    const indexExt = dist2D(lm[8], lm[0]) > dist2D(lm[6], lm[0]) * 1.16;
     const middleExt = dist2D(lm[12], lm[0]) > dist2D(lm[10], lm[0]) * 1.16;
-    const ringExt   = dist2D(lm[16], lm[0]) > dist2D(lm[14], lm[0]) * 1.15;
-    const pinkyExt  = dist2D(lm[20], lm[0]) > dist2D(lm[18], lm[0]) * 1.14;
-    const thumbExt  = dist2D(lm[4],  lm[17]) > palmSize * 0.96;
+    const ringExt = dist2D(lm[16], lm[0]) > dist2D(lm[14], lm[0]) * 1.15;
+    const pinkyExt = dist2D(lm[20], lm[0]) > dist2D(lm[18], lm[0]) * 1.14;
+    const thumbExt = dist2D(lm[4], lm[17]) > palmSize * 0.96;
 
     const extendedCount = (indexExt ? 1 : 0) + (middleExt ? 1 : 0) + (ringExt ? 1 : 0) + (pinkyExt ? 1 : 0) + (thumbExt ? 1 : 0);
 
     // Require all 5 fingers clearly spread open for Open Palm so pointing/moving hand doesn't accidentally summon menu!
     const isOpenPalm = (extendedCount === 5) && !isPinching;
-    const isFist     = !indexExt && !middleExt && !ringExt && !pinkyExt && !isPinching;
+    const isFist = !indexExt && !middleExt && !ringExt && !pinkyExt && !isPinching;
 
     let label = '☝️ Pointing';
-    if (isPinching)      label = '🤏 Pinch';
+    if (isPinching) label = '🤏 Pinch';
     else if (isOpenPalm) label = '🖐️ Open Palm';
-    else if (isFist)     label = '✊ Fist';
+    else if (isFist) label = '✊ Fist';
 
     return { isPinching, isOpenPalm, isFist, indexExt, label };
 }
@@ -1290,12 +1480,12 @@ function _drawMiniHandSkeleton(lm, mirror) {
     const h = _camCanvas.height;
 
     const connections = [
-        [0,1],[1,2],[2,3],[3,4],
-        [0,5],[5,6],[6,7],[7,8],
-        [0,9],[9,10],[10,11],[11,12],
-        [0,13],[13,14],[14,15],[15,16],
-        [0,17],[17,18],[18,19],[19,20],
-        [5,9],[9,13],[13,17]
+        [0, 1], [1, 2], [2, 3], [3, 4],
+        [0, 5], [5, 6], [6, 7], [7, 8],
+        [0, 9], [9, 10], [10, 11], [11, 12],
+        [0, 13], [13, 14], [14, 15], [15, 16],
+        [0, 17], [17, 18], [18, 19], [19, 20],
+        [5, 9], [9, 13], [13, 17]
     ];
 
     _camCtx.strokeStyle = '#00e5ff';
@@ -1388,13 +1578,13 @@ function _detectFistXR(frame, refSpace, hand) {
 }
 
 function _detectPointAndPinchXR(frame, refSpace, hand) {
-    const indexTipJoint  = hand.get('index-finger-tip');
+    const indexTipJoint = hand.get('index-finger-tip');
     const indexBaseJoint = hand.get('index-finger-phalanx-proximal') || hand.get('index-finger-metacarpal');
-    const thumbTipJoint  = hand.get('thumb-tip');
+    const thumbTipJoint = hand.get('thumb-tip');
 
     if (!indexTipJoint || !indexBaseJoint) return { valid: false };
 
-    const tipPose  = frame.getJointPose(indexTipJoint, refSpace);
+    const tipPose = frame.getJointPose(indexTipJoint, refSpace);
     const basePose = frame.getJointPose(indexBaseJoint, refSpace);
     if (!tipPose || !basePose) return { valid: false };
 
@@ -1609,7 +1799,7 @@ function _setupHUDAndOverlays() {
             color: #00e5ff;
             font-weight: bold;
         `;
-        headerBar.innerHTML = '<span>🖐️ HAND AI</span>';
+        headerBar.innerHTML = '<span>🖐️HandCam</span>';
 
         const flipBtn = document.createElement('button');
         flipBtn.textContent = '🔄 Flip';
@@ -1736,7 +1926,7 @@ function _updateCamButtonState(text, isActive = false) {
     if (!_camToggleBtn) return;
     _camToggleBtn.innerHTML = `<span>${text}</span>`;
     _camToggleBtn.style.borderColor = isActive ? '#00ff88' : '#00e5ff';
-    _camToggleBtn.style.color       = isActive ? '#00ff88' : '#00e5ff';
+    _camToggleBtn.style.color = isActive ? '#00ff88' : '#00e5ff';
 }
 
 function _onSessionStart() {
@@ -1775,8 +1965,8 @@ function _onSessionEnd() {
     handsSupported = false;
     trackedHands.clear();
     openPalmStartTime = 0;
-    fistStartTime     = 0;
-    _xrGlBinding      = null;
+    fistStartTime = 0;
+    _xrGlBinding = null;
 
     // Close control panel and hide cursors when stopping AR
     spawnPanelAtCamera(false);
@@ -1885,7 +2075,7 @@ function _prewarmCameraPermission() {
             console.log('[hands] Startup camera preview active — permission granted!');
 
             // Also pre-load the MediaPipe AI model in the background while preview is showing so Hand Cam starts instantly later!
-            _initMediaPipeModel().catch(() => {});
+            _initMediaPipeModel().catch(() => { });
         } catch (err) {
             console.warn('[hands] Startup camera preview notice:', err.name);
             // If auto-play on page load was blocked by mobile browser (needs a user click gesture),
