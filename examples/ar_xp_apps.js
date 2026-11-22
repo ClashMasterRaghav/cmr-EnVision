@@ -670,7 +670,7 @@ export function getBrowserHtml(screenId = '0') {
                 <input class="ie-addr" id="addrBar" value="https://en.wikipedia.org" onkeydown="if(event.key==='Enter')nav()">
                 <button class="ie-btn" onclick="nav()" style="background: #0058EE; color: white; font-weight: bold;">Go</button>
             </div>
-            <iframe id="ieFrame" class="ie-content" src="https://en.wikipedia.org" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
+            <iframe id="ieFrame" class="ie-content" src="https://anikoto.cz/home" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
         </div>
         <script>
             const f = document.getElementById('ieFrame'), b = document.getElementById('addrBar');
