@@ -803,37 +803,14 @@ async function _toggleHandCamera() {
         if (_gestureBadge) _gestureBadge.textContent = '📷 Requesting Camera...';
 
         // 1. If currently inside an ARCore WebXR session:
-        //    Check if WebXR Raw Camera Access (`camera-access`) was granted by Chrome!
-        //    If YES -> Stay INSIDE true 6DoF ARCore so apps stay 100% locked in physical room space!
-        //    If NO  -> Exit ARCore to unlock getUserMedia, or prompt user how to enable 6DoF camera-access.
+        //    NEVER call session.end() automatically! Keep the user inside true 6DoF ARCore so AR never stops!
         if (_renderer && _renderer.xr && _renderer.xr.isPresenting) {
-            const session = _renderer.xr.getSession();
-            const hasXrCam = session && session.enabledFeatures && session.enabledFeatures.includes('camera-access');
-
-            if (hasXrCam) {
-                console.log('[hands] True 6DoF ARCore + WebXR Raw Camera Access active!');
-                _usingXrCamera = true;
-            } else {
-                console.log('[hands] Exiting ARCore session to unlock phone camera for Hand AI...');
-                window.__suppressARReload = true;
-                try {
-                    await session.end();
-                } catch (e) {}
-                await new Promise(r => setTimeout(r, 600));
-
-                try {
-                    _mpStream = await _acquireCameraStream(_mpFacingMode);
-                    _usingXrCamera = false;
-                } catch (gestureExpiredErr) {
-                    _mpLoading = false;
-                    _updateCamButtonState('👉 Tap Again: Start Cam', true);
-                    if (_gestureBadge) _gestureBadge.textContent = 'Tap button once more to allow camera';
-                    createNotification('ARCore unlocked! Tap "👉 Tap Again: Start Cam" once more to start.', 'info');
-                    return;
-                }
-            }
+            // Try WebXR Raw Camera Access (`view.camera`) first on the next render frame,
+            // and also attempt to open a secondary camera stream if the device supports concurrent streams.
+            console.log('[hands] Staying inside 6DoF ARCore session — enabling WebXR camera-access / concurrent stream...');
+            _usingXrCamera = true;
         } else {
-            // 2. Not in ARCore — call getUserMedia() SYNCHRONOUSLY inside the user's tap event
+            // 2. Not in ARCore — call getUserMedia() inside the user's click event
             _mpStream = await _acquireCameraStream(_mpFacingMode);
             _usingXrCamera = false;
         }
@@ -1505,21 +1482,33 @@ function _updateCursorProgress(progress, targetName, isPinching) {
 }
 
 /**
- * Helper to bind both touchstart and click so mobile WebXR DOM overlays never swallow button taps!
+ * Helper to bind tap events cleanly:
+ * CRITICAL: We must bind to `click` (or `touchend`), NOT `touchstart` with `e.preventDefault()`!
+ * In Mobile Chrome, calling `navigator.mediaDevices.getUserMedia()` inside a `touchstart` handler
+ * does NOT count as a valid user activation gesture for permission prompts, causing Chrome to throw
+ * `NotAllowedError: Permission denied`! `click` always carries full user activation.
  */
 function _bindMobileSafeTap(element, handler) {
     if (!element) return;
     let lastInvoke = 0;
-    const wrapped = (e) => {
+
+    // Stop touchstart from bubbling down to Three.js canvas (which calls preventDefault and would cancel the click!)
+    element.addEventListener('touchstart', (e) => {
+        e.stopPropagation();
+    }, { passive: true });
+
+    element.addEventListener('touchend', (e) => {
+        e.stopPropagation();
+    }, { passive: true });
+
+    element.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
         const now = performance.now();
         if (now - lastInvoke < 300) return;
         lastInvoke = now;
         handler(e);
-    };
-    element.addEventListener('touchstart', wrapped, { passive: false });
-    element.addEventListener('click', wrapped);
+    });
 }
 
 function _setupHUDAndOverlays() {
@@ -1879,8 +1868,18 @@ function _prewarmCameraPermission() {
             _initMediaPipeModel().catch(() => {});
         } catch (err) {
             console.warn('[hands] Startup camera preview notice:', err.name);
-            if (_camPreviewBox && !_mpActive) {
-                _camPreviewBox.style.display = 'none';
+            // If auto-play on page load was blocked by mobile browser (needs a user click gesture),
+            // show a clickable "👉 Tap to Enable Camera" button inside the preview box!
+            if (_camPreviewBox && !_mpActive && _gestureBadge) {
+                _camPreviewBox.style.display = 'flex';
+                _gestureBadge.textContent = '👉 Tap Here to Allow Cam';
+                _gestureBadge.style.color = '#00ff88';
+                _gestureBadge.style.cursor = 'pointer';
+                const retryOnClick = () => {
+                    _camPreviewBox.removeEventListener('click', retryOnClick);
+                    startPreview();
+                };
+                _camPreviewBox.addEventListener('click', retryOnClick);
             }
         }
     };
