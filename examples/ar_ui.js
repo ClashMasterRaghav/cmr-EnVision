@@ -16,8 +16,10 @@ export let isResizeModeActive = false;
 export function createNotification(message, type = 'info') {
     console.log(`Notification (${type}): ${message}`);
     
-    // Create DOM notification only (3D floating space popups removed to keep AR space clean)
-    createDOMNotification(message, type);
+    // Only show critical errors/warnings on screen — suppress routine info/success toast spam!
+    if (type === 'error' || type === 'warning') {
+        createDOMNotification(message, type);
+    }
 }
 
 // Alias for backward compatibility
@@ -29,26 +31,28 @@ export function initUI() {
     createVirtualKeyboard();
 }
 
-// Create a notification in the DOM
+// Create a notification in the DOM (single non-stacking pill for important alerts only)
 function createDOMNotification(message, type = 'info') {
     const container = document.getElementById('notificationContainer');
     if (!container) return;
     
+    // Clear any existing notification so they never stack up
+    container.innerHTML = '';
+
     // Create notification element
     const notification = document.createElement('div');
     notification.className = 'notification';
     notification.textContent = message;
+    notification.style.fontSize = '11px';
+    notification.style.padding = '6px 12px';
     
     // Add type-specific styling
     switch(type) {
         case 'error':
-            notification.style.backgroundColor = 'rgba(255, 0, 0, 0.7)';
-            break;
-        case 'success':
-            notification.style.backgroundColor = 'rgba(0, 255, 0, 0.7)';
+            notification.style.backgroundColor = 'rgba(220, 38, 38, 0.85)';
             break;
         case 'warning':
-            notification.style.backgroundColor = 'rgba(255, 165, 0, 0.7)';
+            notification.style.backgroundColor = 'rgba(217, 119, 6, 0.85)';
             break;
         default:
             notification.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
@@ -62,7 +66,7 @@ function createDOMNotification(message, type = 'info') {
         if (notification.parentNode === container) {
             container.removeChild(notification);
         }
-    }, 3000);
+    }, 2200);
 }
 
 // Create a 3D notification in space

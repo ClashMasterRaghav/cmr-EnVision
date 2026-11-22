@@ -654,6 +654,21 @@ function onTouchStart(event) {
         return;
     }
 
+    // Two-finger Pinch Gesture: bring selected screen closer or push further away!
+    if (event.touches && event.touches.length === 2) {
+        const dx = event.touches[0].clientX - event.touches[1].clientX;
+        const dy = event.touches[0].clientY - event.touches[1].clientY;
+        initialPinchDistance = Math.hypot(dx, dy);
+        isPinching = true;
+        const target = selectedScreen || (screens && screens.length > 0 ? screens[screens.length - 1] : null);
+        if (target && camera) {
+            const camWorldPos = new THREE.Vector3();
+            camera.getWorldPosition(camWorldPos);
+            target.userData.initialPinchDepth = target.position.distanceTo(camWorldPos);
+        }
+        return;
+    }
+
     // Single touch handling
     const touch = event.touches[0];
 
@@ -962,6 +977,31 @@ function onTouchMove(event) {
     // Always prevent default to avoid browser gestures
     event.preventDefault();
 
+    // Handle 2-finger pinch-to-zoom depth (spread fingers = bring screen closer, pinch fingers = push further)
+    if (isPinching && event.touches && event.touches.length === 2) {
+        const target = selectedScreen || (screens && screens.length > 0 ? screens[screens.length - 1] : null);
+        if (target && camera && initialPinchDistance > 10) {
+            const dx = event.touches[0].clientX - event.touches[1].clientX;
+            const dy = event.touches[0].clientY - event.touches[1].clientY;
+            const curPinchDist = Math.hypot(dx, dy);
+            const pinchRatio = curPinchDist / initialPinchDistance;
+
+            const camWorldPos = new THREE.Vector3();
+            camera.updateMatrixWorld(true);
+            camera.getWorldPosition(camWorldPos);
+
+            const baseDepth = target.userData.initialPinchDepth || target.position.distanceTo(camWorldPos);
+            // Spreading fingers apart (pinchRatio > 1) reduces distance (brings screen closer!)
+            const newDist = THREE.MathUtils.clamp(baseDepth / pinchRatio, 0.55, 3.5);
+
+            const toScreen = target.position.clone().sub(camWorldPos).normalize().multiplyScalar(newDist);
+            target.position.copy(camWorldPos).add(toScreen);
+            target.lookAt(camWorldPos);
+            syncCSS3DObject(target);
+        }
+        return;
+    }
+
     // Make sure we have a valid touch point
     const touch = event.touches[0];
     if (!touch) {
@@ -1211,9 +1251,9 @@ function updateVideoTime(progress) {
     // Keeping the function to maintain code structure in case we need to reimplement
 }
 
-// Create a floating text indicator for mode changes (uses DOM notification instead of 3D space popup)
+// Mode change / selection indicator (logged to console only to avoid distracting on-screen popups)
 function createModeChangeIndicator(message) {
-    showNotification(message, 'info');
+    console.log('[AR Status]:', message);
 }
 
 // Helper function to find a screen from a drag handle

@@ -24,27 +24,30 @@ let _controlPanel = null;
 let _renderer     = null;
 let _scene        = null;
 let _camera       = null;
-let panelVisible  = true;
+let panelVisible  = false;
 let panelLocked   = false;
 
-// Gesture hold timers
+// Gesture hold timers (longer intentional hold so the Control Panel doesn't open accidentally)
 let openPalmStartTime = 0;
 let fistStartTime     = 0;
 let lastGestureTime   = 0;
-const OPEN_PALM_HOLD_MS   = 320;
-const FIST_HOLD_MS        = 380;
-const GESTURE_COOLDOWN_MS = 850;
+const OPEN_PALM_HOLD_MS   = 1150; // Hold full open palm for ~1.15s to summon menu intentionally
+const FIST_HOLD_MS        = 900;  // Hold closed fist for ~0.9s to close menu
+const GESTURE_COOLDOWN_MS = 2200; // 2.2s cooldown between gesture toggles
 
 // Hover / Dwell & Pinch interaction state
 let hoveredButton       = null;
 let hoverStartTime      = 0;
-const DWELL_CLICK_MS    = 1050; // Hold cursor on app icon for ~1s to launch hands-free
+const DWELL_CLICK_MS    = 1350; // Hold cursor on app icon for ~1.35s to launch hands-free
 let wasPinching         = false;
 let lastClickTime       = 0;
-const CLICK_COOLDOWN_MS = 750;
+const CLICK_COOLDOWN_MS = 1000;
 
-// Pinch-to-drag screen state
+// Pinch-to-drag screen state (supports 3D X/Y movement + Z depth push/pull based on hand size!)
 let pinchedScreen       = null;
+let _pinchInitialPalmSize = 0;
+let _pinchInitialScreenDist = 1.5;
+let _currentPalmSize    = 0.1;
 const _pinchDragPlane   = new THREE.Plane();
 const _pinchDragOffset  = new THREE.Vector3();
 
@@ -343,7 +346,7 @@ function _processRayInteraction(isPinching, is3DRay = false, rayOrigin = null, r
     const now = performance.now();
     const cam = _camera || window.__arCamera;
 
-    // 1. Handle active Pinch-Drag on a 3D app window
+    // 1. Handle active Pinch-Drag on a 3D app window (moves X/Y and pushes/pulls closer/further with hand distance!)
     if (pinchedScreen) {
         if (isPinching && cam) {
             const camWorldPos = new THREE.Vector3();
@@ -351,12 +354,21 @@ function _processRayInteraction(isPinching, is3DRay = false, rayOrigin = null, r
             const planeHit = new THREE.Vector3();
             if (_handRaycaster.ray.intersectPlane(_pinchDragPlane, planeHit)) {
                 const targetPos = planeHit.sub(_pinchDragOffset);
-                const dist = targetPos.distanceTo(camWorldPos);
-                if (dist >= 0.5 && dist <= 3.5) {
-                    pinchedScreen.position.lerp(targetPos, 0.45);
-                    pinchedScreen.lookAt(camWorldPos);
-                    syncCSS3DObject(pinchedScreen);
+
+                // Adjust depth (closer/further) dynamically as user moves their pinched hand closer or further from camera!
+                let desiredDist = _pinchInitialScreenDist;
+                if (_pinchInitialPalmSize > 0.02 && _currentPalmSize > 0.02) {
+                    const sizeRatio = THREE.MathUtils.clamp(_currentPalmSize / _pinchInitialPalmSize, 0.5, 2.0);
+                    // Hand closer to camera (sizeRatio > 1) -> pulls screen closer; hand further -> pushes screen further
+                    desiredDist = THREE.MathUtils.clamp(_pinchInitialScreenDist / sizeRatio, 0.55, 3.5);
                 }
+
+                const dirFromCam = targetPos.clone().sub(camWorldPos).normalize();
+                const finalPos = camWorldPos.clone().addScaledVector(dirFromCam, desiredDist);
+
+                pinchedScreen.position.lerp(finalPos, 0.38);
+                pinchedScreen.lookAt(camWorldPos);
+                syncCSS3DObject(pinchedScreen);
             }
             wasPinching = isPinching;
             return;
@@ -432,12 +444,16 @@ function _processRayInteraction(isPinching, is3DRay = false, rayOrigin = null, r
             if (targetScreen) {
                 selectScreen(targetScreen);
                 pinchedScreen = targetScreen;
+                const camWorldPos = new THREE.Vector3();
                 const camWorldQuat = new THREE.Quaternion();
+                cam.getWorldPosition(camWorldPos);
                 cam.getWorldQuaternion(camWorldQuat);
+                _pinchInitialScreenDist = THREE.MathUtils.clamp(targetScreen.position.distanceTo(camWorldPos), 0.55, 3.5);
+                _pinchInitialPalmSize = _currentPalmSize;
                 const camForward = new THREE.Vector3(0, 0, -1).applyQuaternion(camWorldQuat);
                 _pinchDragPlane.setFromNormalAndCoplanarPoint(camForward, screenHits[0].point);
                 _pinchDragOffset.copy(screenHits[0].point).sub(targetScreen.position);
-                createNotification('🤏 Hand Grab: Move hand to drag screen', 'info');
+                createNotification('🤏 Hand Grab: Move hand to drag or pull closer/further', 'info');
             }
         }
     }
@@ -1241,22 +1257,23 @@ function _updateMediaPipeHands(frame = null) {
 function _classifyMediaPipeHand(lm) {
     const dist2D = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
     const palmSize = Math.max(0.05, dist2D(lm[0], lm[9]));
+    _currentPalmSize = THREE.MathUtils.lerp(_currentPalmSize, palmSize, 0.35);
 
     // Pinch distance between thumb tip (4) and index tip (8) normalized by palm size
     const pinchDist = dist2D(lm[4], lm[8]) / palmSize;
     const isPinching = pinchDist < 0.36;
 
-    // Finger extension checks (tip farther from wrist than PIP joint)
-    const indexExt  = dist2D(lm[8],  lm[0]) > dist2D(lm[6],  lm[0]) * 1.10;
-    const middleExt = dist2D(lm[12], lm[0]) > dist2D(lm[10], lm[0]) * 1.10;
-    const ringExt   = dist2D(lm[16], lm[0]) > dist2D(lm[14], lm[0]) * 1.10;
-    const pinkyExt  = dist2D(lm[20], lm[0]) > dist2D(lm[18], lm[0]) * 1.10;
-    const thumbExt  = dist2D(lm[4],  lm[17]) > palmSize * 0.88;
+    // Finger extension checks (stricter extension ratio so casual hand movements don't false-trigger Open Palm)
+    const indexExt  = dist2D(lm[8],  lm[0]) > dist2D(lm[6],  lm[0]) * 1.16;
+    const middleExt = dist2D(lm[12], lm[0]) > dist2D(lm[10], lm[0]) * 1.16;
+    const ringExt   = dist2D(lm[16], lm[0]) > dist2D(lm[14], lm[0]) * 1.15;
+    const pinkyExt  = dist2D(lm[20], lm[0]) > dist2D(lm[18], lm[0]) * 1.14;
+    const thumbExt  = dist2D(lm[4],  lm[17]) > palmSize * 0.96;
 
     const extendedCount = (indexExt ? 1 : 0) + (middleExt ? 1 : 0) + (ringExt ? 1 : 0) + (pinkyExt ? 1 : 0) + (thumbExt ? 1 : 0);
 
-    // Allow 4 or 5 extended fingers to count as Open Palm (much easier to trigger on mobile camera angles!)
-    const isOpenPalm = (extendedCount >= 4 && indexExt && middleExt && ringExt) && !isPinching;
+    // Require all 5 fingers clearly spread open for Open Palm so pointing/moving hand doesn't accidentally summon menu!
+    const isOpenPalm = (extendedCount === 5) && !isPinching;
     const isFist     = !indexExt && !middleExt && !ringExt && !pinkyExt && !isPinching;
 
     let label = '☝️ Pointing';
@@ -1736,10 +1753,8 @@ function _onSessionStart() {
     const hud = document.getElementById('handControlHUD');
     if (hud) hud.style.display = 'flex';
 
-    // Position control panel comfortably in front of user at startup
-    setTimeout(() => {
-        spawnPanelAtCamera(true);
-    }, 600);
+    // Start AR with a clean view (control panel closed until user taps Menu or holds Open Palm)
+    spawnPanelAtCamera(false);
 
     // If Hand Cam was started BEFORE entering AR, ARCore may pause the rear getUserMedia stream.
     if (_mpActive) {
@@ -1753,7 +1768,7 @@ function _onSessionStart() {
         }, 900);
     }
 
-    console.log('[hands] XR session started — control panel & hand gestures active.');
+    console.log('[hands] XR session started — clean AR space ready.');
 }
 
 function _onSessionEnd() {
@@ -1763,7 +1778,12 @@ function _onSessionEnd() {
     fistStartTime     = 0;
     _xrGlBinding      = null;
 
-    if (_controlPanel) _controlPanel.visible = true;
+    // Close control panel and hide cursors when stopping AR
+    spawnPanelAtCamera(false);
+    if (isMobileDevice) {
+        const hud = document.getElementById('handControlHUD');
+        if (hud) hud.style.display = 'none';
+    }
     if (_cursorGroup3D) _cursorGroup3D.visible = false;
     if (_laserLine3D) _laserLine3D.visible = false;
 

@@ -4,7 +4,7 @@ import { ARButton } from 'three/addons/webxr/ARButton.js';
 import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
 import { FontLoader } from 'three/addons/loaders/FontLoader.js';
 import { createControlPanel, setupControlPanel, controlPanel } from './ar_ui.js';
-import { createNewBrowserScreen, selectScreen, screens, updateScreenEffects, syncAllCSS3DScreens, updateCSS3DRenderer } from './ar_screens.js';
+import { createNewBrowserScreen, selectScreen, screens, removeScreen, updateScreenEffects, syncAllCSS3DScreens, updateCSS3DRenderer } from './ar_screens.js';
 import { setupEventListeners, setupVideoControls, showControlPanelInstructions } from './ar_interaction.js';
 import { initUI, createNotification } from './ar_ui.js';
 import { loadVideoTexture, toggleVideoPlayback, toggleVideoMute, updateVideoTextures } from './ar_media.js';
@@ -147,24 +147,33 @@ function initAREnvironment() {
         obs.observe(arButton, { attributes: true, attributeFilter: ['style'] });
     }
     
+    // Helper to close all open app screens when entering or leaving AR so apps never carry over
+    function clearAllScreens() {
+        if (screens && screens.length > 0) {
+            while (screens.length > 0) {
+                removeScreen(screens[screens.length - 1]);
+            }
+        }
+    }
+
     // Add event listener for session start
     renderer.xr.addEventListener('sessionstart', function() {
-        console.log("AR session started - showing panel instructions");
-        // Show instructions for draggable panel after a short delay
+        console.log("AR session started - clearing pre-AR apps and showing panel instructions");
+        clearAllScreens();
         showControlPanelInstructions();
     });
     
     // Add event listener for session end
     renderer.xr.addEventListener('sessionend', function() {
-        console.log("AR session ended");
+        console.log("AR session ended - closing all AR apps");
         // Ensure body stays visible even if ARButton tried to hide domOverlay.root
         document.body.style.display = '';
         if (window.__suppressARReload) {
             window.__suppressARReload = false;
-            console.log("Hand-Cam AR passthrough active — skipping page reload");
+            console.log("Hand-Cam AR passthrough active — skipping screen clear");
             return;
         }
-        // Keep current session state intact instead of forcing a full page reload
+        clearAllScreens();
     });
 
     // Load font for text labels (3D notifications etc.)
@@ -358,10 +367,11 @@ export function render(timestamp, frame) {
     updateCSS3DRenderer();
 }
 
-// Create a welcome screen at the start
+// Initialize clean start state (no pre-opened apps on the Start AR screen!)
 function createStartScreen() {
-    const startScreen = createNewBrowserScreen(new THREE.Vector3(0, 0, -1.5));
-    
-    // Set up control panel initial position
-    setTimeout(setupControlPanel, 500);
+    // Keep control panel hidden on the initial Start AR screen until user opens Menu or enters AR
+    if (controlPanel) {
+        controlPanel.visible = false;
+        controlPanel.position.set(0, -9999, 0);
+    }
 }
