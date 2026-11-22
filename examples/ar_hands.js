@@ -138,6 +138,9 @@ export function initHandTracking(controlPanelRef, rendererRef = null, sceneRef =
     // Setup touchscreen 3+ finger palm tap gesture right away
     _setupTouchPalmSummon();
 
+    // Pre-request camera permission at startup (or on first screen touch) so permission is already granted before entering AR!
+    _prewarmCameraPermission();
+
     if (!_renderer || !_renderer.xr) {
         console.warn('[hands] Renderer or XR not ready — WebXR hand events skipped, MediaPipe Cam still available.');
         return;
@@ -880,10 +883,63 @@ function _stopHandCamera() {
 }
 
 async function _flipHandCamera() {
-    _mpFacingMode = _mpFacingMode === 'user' ? 'environment' : 'user';
-    if (_mpActive) {
-        _stopHandCamera();
-        await _toggleHandCamera();
+    const nextFacing = _mpFacingMode === 'user' ? 'environment' : 'user';
+    _mpFacingMode = nextFacing;
+
+    if (!_mpActive || _mpLoading) return;
+    _mpLoading = true;
+    if (_gestureBadge) _gestureBadge.textContent = `🔄 Switching to ${nextFacing === 'environment' ? 'Rear' : 'Front'}...`;
+
+    // Case 1: User flipped to Rear ('environment') while inside a 6DoF ARCore session with camera-access enabled
+    const isInAR = _renderer && _renderer.xr && _renderer.xr.isPresenting;
+    if (isInAR && nextFacing === 'environment') {
+        const session = _renderer.xr.getSession();
+        const hasXrCam = session && session.enabledFeatures && session.enabledFeatures.includes('camera-access');
+        if (hasXrCam) {
+            if (_mpStream) {
+                _mpStream.getTracks().forEach(t => t.stop());
+                _mpStream = null;
+            }
+            if (_camVideo) {
+                _camVideo.srcObject = null;
+                _camVideo.style.display = 'none';
+            }
+            _usingXrCamera = true;
+            _mpLoading = false;
+            _updateCamButtonState('📷 Hand (Rear)', true);
+            if (_gestureBadge) _gestureBadge.textContent = 'Show hand (Rear)...';
+            return;
+        }
+    }
+
+    // Case 2: Switch via getUserMedia (either Front cam inside AR, or Front <-> Rear outside ARCore)
+    try {
+        // Release old camera tracks first and give Android hardware 150ms to free the camera device
+        if (_mpStream) {
+            _mpStream.getTracks().forEach(t => t.stop());
+            _mpStream = null;
+        }
+        if (_camVideo) {
+            _camVideo.srcObject = null;
+            _camVideo.style.display = 'block';
+        }
+        await new Promise(r => setTimeout(r, 150));
+
+        _mpStream = await _acquireCameraStream(nextFacing);
+        _usingXrCamera = false;
+
+        if (isMobileDevice && !isInAR) {
+            _enableLiveCameraARBackground(_mpStream);
+        }
+
+        _mpLoading = false;
+        const camLabel = _mpFacingMode === 'environment' ? 'Rear' : 'Front';
+        _updateCamButtonState(`📷 Hand (${camLabel})`, true);
+        if (_gestureBadge) _gestureBadge.textContent = `Show hand (${camLabel})...`;
+    } catch (err) {
+        console.warn('[hands] Flip camera error:', err);
+        _mpLoading = false;
+        if (_gestureBadge) _gestureBadge.textContent = 'Flip unavailable in ARCore';
     }
 }
 
@@ -1035,6 +1091,10 @@ function _updateMediaPipeHands(frame = null) {
     }
 
     if (_usingXrCamera) {
+        // Hide the unused <video> element so the ARCore canvas frame on _camCanvas is 100% visible!
+        if (_camVideo && _camVideo.style.display !== 'none') {
+            _camVideo.style.display = 'none';
+        }
         const xrFrameCanvas = _captureWebXRCameraFrame(frame);
         mirror = false;
         if (!xrFrameCanvas) {
@@ -1043,6 +1103,7 @@ function _updateMediaPipeHands(frame = null) {
                 console.log('[hands] WebXR view.camera not available — switching to Front Camera stream.');
                 _usingXrCamera = false;
                 _mpFacingMode = 'user';
+                if (_camVideo) _camVideo.style.display = 'block';
                 _acquireCameraStream('user').then(stream => {
                     _mpStream = stream;
                     _updateCamButtonState('📷 Hand (Front)', true);
@@ -1062,6 +1123,9 @@ function _updateMediaPipeHands(frame = null) {
         _camCtx.clearRect(0, 0, _camCanvas.width, _camCanvas.height);
         _camCtx.drawImage(xrFrameCanvas, 0, 0, _camCanvas.width, _camCanvas.height);
     } else {
+        if (_camVideo && _camVideo.style.display === 'none') {
+            _camVideo.style.display = 'block';
+        }
         if (!_camVideo || _camVideo.readyState < 2 || _camVideo.videoWidth === 0) {
             if (_camVideo && _camVideo.paused) {
                 _camVideo.play().catch(() => {});
@@ -1212,9 +1276,9 @@ function _classifyMediaPipeHand(lm) {
     const isFist     = !indexExt && !middleExt && !ringExt && !pinkyExt && !isPinching;
 
     let label = '☝️ Pointing';
-    if (isPinching)      label = '🤏 Pinch (Click)';
-    else if (isOpenPalm) label = '🖐️ Open Palm (Menu)';
-    else if (isFist)     label = '✊ Fist (Close Menu)';
+    if (isPinching)      label = '🤏 Pinch';
+    else if (isOpenPalm) label = '🖐️ Open Palm';
+    else if (isFist)     label = '✊ Fist';
 
     return { isPinching, isOpenPalm, isFist, indexExt, label };
 }
@@ -1576,12 +1640,16 @@ function _setupHUDAndOverlays() {
 
         _gestureBadge = document.createElement('div');
         _gestureBadge.style.cssText = `
-            padding: 5px 6px;
+            padding: 3px 5px;
             font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-            font-size: 11px;
+            font-size: 9.5px;
+            line-height: 1.15;
             font-weight: 700;
             color: #00e5ff;
             text-align: center;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
             border-top: 1px solid rgba(0, 229, 255, 0.25);
         `;
         _gestureBadge.textContent = 'Show Hand...';
@@ -1716,6 +1784,39 @@ function _onInputSourcesChange(event) {
             trackedHands.delete(source.handedness);
         }
     }
+}
+
+// ─── Pre-warm Camera Permission at Startup ──────────────────────────────────
+let _permissionPrewarmed = false;
+function _prewarmCameraPermission() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
+    if (!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') return;
+
+    const requestOnce = async () => {
+        if (_permissionPrewarmed || _mpActive || (_renderer && _renderer.xr && _renderer.xr.isPresenting)) return;
+        _permissionPrewarmed = true;
+        try {
+            // Briefly open and immediately release the camera so the browser grants & caches Camera permission right at the start!
+            const tempStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+            tempStream.getTracks().forEach(t => t.stop());
+            console.log('[hands] Camera permission pre-warmed at startup.');
+        } catch (err) {
+            // If browser blocked auto-prompt on load, retry on first user touch
+            _permissionPrewarmed = false;
+        }
+    };
+
+    // Try immediately on page load
+    requestOnce();
+
+    // Also attach a one-time listener on the first screen tap (before START AR) in case mobile browser requires a gesture for the prompt
+    const onFirstTap = () => {
+        requestOnce();
+        window.removeEventListener('touchstart', onFirstTap, true);
+        window.removeEventListener('click', onFirstTap, true);
+    };
+    window.addEventListener('touchstart', onFirstTap, { capture: true, passive: true });
+    window.addEventListener('click', onFirstTap, { capture: true, passive: true });
 }
 
 // ─── Touchscreen Palm Tap Gesture (Mobile AR) ────────────────────────────────

@@ -157,13 +157,14 @@ function initAREnvironment() {
     // Add event listener for session end
     renderer.xr.addEventListener('sessionend', function() {
         console.log("AR session ended");
+        // Ensure body stays visible even if ARButton tried to hide domOverlay.root
+        document.body.style.display = '';
         if (window.__suppressARReload) {
             window.__suppressARReload = false;
             console.log("Hand-Cam AR passthrough active — skipping page reload");
             return;
         }
-        // Reload the page to return to initial state
-        window.location.reload();
+        // Keep current session state intact instead of forcing a full page reload
     });
 
     // Load font for text labels (3D notifications etc.)
