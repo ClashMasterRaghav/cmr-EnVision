@@ -774,6 +774,13 @@ function _enableGyroCameraTracking() {
 }
 
 async function _toggleHandCamera() {
+    // Clean up startup preview stream if it's still running
+    if (_startupPreviewStream) {
+        _startupPreviewStream.getTracks().forEach(t => t.stop());
+        _startupPreviewStream = null;
+        _startupPreviewStopped = true;
+    }
+
     if (_mpActive) {
         _stopHandCamera();
         return;
@@ -1727,6 +1734,9 @@ function _updateCamButtonState(text, isActive = false) {
 }
 
 function _onSessionStart() {
+    // Ensure startup preview stream is released when AR session starts
+    _stopStartupCameraPreview();
+
     if (!_renderer || !_renderer.xr) return;
     const session = _renderer.xr.getSession();
     if (!session) return;
@@ -1786,37 +1796,97 @@ function _onInputSourcesChange(event) {
     }
 }
 
-// ─── Pre-warm Camera Permission at Startup ──────────────────────────────────
-let _permissionPrewarmed = false;
+// ─── Startup Camera Preview & Permission Prompt ─────────────────────────────
+let _startupPreviewStream = null;
+let _startupPreviewStopped = false;
+
+function _stopStartupCameraPreview() {
+    _startupPreviewStopped = true;
+    if (_startupPreviewStream) {
+        _startupPreviewStream.getTracks().forEach(t => t.stop());
+        _startupPreviewStream = null;
+    }
+    if (!_mpActive) {
+        if (_camVideo) _camVideo.srcObject = null;
+        if (_camPreviewBox) _camPreviewBox.style.display = 'none';
+    }
+}
+
 function _prewarmCameraPermission() {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
     if (!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') return;
 
-    const requestOnce = async () => {
-        if (_permissionPrewarmed || _mpActive || (_renderer && _renderer.xr && _renderer.xr.isPresenting)) return;
-        _permissionPrewarmed = true;
+    // 1. Intercept the "START AR" button tap in the capture phase so any startup preview camera stream
+    //    is immediately stopped BEFORE ARCore requests the hardware camera!
+    window.addEventListener('pointerdown', (e) => {
+        const target = e.target;
+        if (target && (target.id === 'ARButton' || (target.closest && target.closest('#ARButton')))) {
+            if (_startupPreviewStream) {
+                console.log('[hands] Releasing startup camera preview before ARCore starts...');
+                _stopStartupCameraPreview();
+            }
+        }
+    }, true);
+
+    window.addEventListener('touchstart', (e) => {
+        const target = e.target;
+        if (target && (target.id === 'ARButton' || (target.closest && target.closest('#ARButton')))) {
+            if (_startupPreviewStream) {
+                _stopStartupCameraPreview();
+            }
+        }
+    }, { capture: true, passive: true });
+
+    // 2. Turn on the live camera preview box right at the beginning so the browser asks for Camera permission immediately!
+    const startPreview = async () => {
+        if (_startupPreviewStopped || _mpActive || (_renderer && _renderer.xr && _renderer.xr.isPresenting)) return;
         try {
-            // Briefly open and immediately release the camera so the browser grants & caches Camera permission right at the start!
-            const tempStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-            tempStream.getTracks().forEach(t => t.stop());
-            console.log('[hands] Camera permission pre-warmed at startup.');
+            if (_camPreviewBox) {
+                _camPreviewBox.style.display = 'flex';
+            }
+            if (_gestureBadge) {
+                _gestureBadge.textContent = '📷 Allowing Camera...';
+            }
+
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: _mpFacingMode, width: { ideal: 640 }, height: { ideal: 480 } },
+                audio: false
+            });
+
+            // If user already tapped START AR while the permission popup was open, release immediately
+            if (_startupPreviewStopped || _mpActive || (_renderer && _renderer.xr && _renderer.xr.isPresenting)) {
+                stream.getTracks().forEach(t => t.stop());
+                return;
+            }
+
+            _startupPreviewStream = stream;
+            if (_camVideo) {
+                _camVideo.style.display = 'block';
+                _camVideo.style.transform = _mpFacingMode === 'user' ? 'scaleX(-1)' : 'none';
+                _camVideo.srcObject = stream;
+                await _camVideo.play();
+                if (_camVideo.videoWidth > 0 && _camVideo.videoHeight > 0) {
+                    _syncPreviewAspectRatio(_camVideo.videoWidth, _camVideo.videoHeight);
+                }
+            }
+            if (_gestureBadge) {
+                _gestureBadge.textContent = '✅ Cam Ready (Tap START AR)';
+                _gestureBadge.style.color = '#00ff88';
+            }
+            console.log('[hands] Startup camera preview active — permission granted!');
+
+            // Also pre-load the MediaPipe AI model in the background while preview is showing so Hand Cam starts instantly later!
+            _initMediaPipeModel().catch(() => {});
         } catch (err) {
-            // If browser blocked auto-prompt on load, retry on first user touch
-            _permissionPrewarmed = false;
+            console.warn('[hands] Startup camera preview notice:', err.name);
+            if (_camPreviewBox && !_mpActive) {
+                _camPreviewBox.style.display = 'none';
+            }
         }
     };
 
-    // Try immediately on page load
-    requestOnce();
-
-    // Also attach a one-time listener on the first screen tap (before START AR) in case mobile browser requires a gesture for the prompt
-    const onFirstTap = () => {
-        requestOnce();
-        window.removeEventListener('touchstart', onFirstTap, true);
-        window.removeEventListener('click', onFirstTap, true);
-    };
-    window.addEventListener('touchstart', onFirstTap, { capture: true, passive: true });
-    window.addEventListener('click', onFirstTap, { capture: true, passive: true });
+    // Run immediately on page load
+    startPreview();
 }
 
 // ─── Touchscreen Palm Tap Gesture (Mobile AR) ────────────────────────────────
