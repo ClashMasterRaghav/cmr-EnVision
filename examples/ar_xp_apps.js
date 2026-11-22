@@ -667,7 +667,7 @@ export function getBrowserHtml(screenId = '0') {
                 <button class="ie-btn" onclick="histBack()">◀</button>
                 <button class="ie-btn" onclick="histFwd()">▶</button>
                 <button class="ie-btn" onclick="reloadFrame()">↻</button>
-                <input class="ie-addr" id="addrBar" value="https://en.wikipedia.org" onkeydown="if(event.key==='Enter')nav()">
+                <input class="ie-addr" id="addrBar" value="https://anikoto.cz/home" onkeydown="if(event.key==='Enter')nav()">
                 <button class="ie-btn" onclick="nav()" style="background: #0058EE; color: white; font-weight: bold;">Go</button>
             </div>
             <iframe id="ieFrame" class="ie-content" src="https://anikoto.cz/home" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
