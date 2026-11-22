@@ -709,11 +709,11 @@ export function getYouTubeHtml(screenId = '0') {
     const html = `
         <div class="yt-box">
             <div class="yt-bar">
-                <input class="yt-input" id="ytIn" placeholder="Enter video ID or YouTube URL..." value="dQw4w9WgXcQ" onkeydown="if(event.key==='Enter')loadYt()">
+                <input class="yt-input" id="ytIn" placeholder="Enter video ID or YouTube URL..." value="SCEaijZ8QmU" onkeydown="if(event.key==='Enter')loadYt()">
                 <button class="yt-btn" onclick="loadYt()">Play</button>
             </div>
             <div class="yt-view">
-                <iframe id="ytFrame" src="https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?autoplay=1&mute=1&enablejsapi=1" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                <iframe id="ytFrame" src="https://www.youtube-nocookie.com/embed/SCEaijZ8QmU?autoplay=1&mute=1&enablejsapi=1" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
             </div>
         </div>
         <script>
