@@ -96,7 +96,7 @@ function initAREnvironment() {
     const arButton = ARButton.createButton(renderer, {
         requiredFeatures: ['hit-test', 'dom-overlay'],
         domOverlay: { root: document.body },
-        optionalFeatures: ['dom-overlay', 'light-estimation', 'hand-tracking']
+        optionalFeatures: ['dom-overlay', 'light-estimation', 'hand-tracking', 'camera-access']
     });
     document.body.appendChild(arButton);
 
@@ -157,6 +157,11 @@ function initAREnvironment() {
     // Add event listener for session end
     renderer.xr.addEventListener('sessionend', function() {
         console.log("AR session ended");
+        if (window.__suppressARReload) {
+            window.__suppressARReload = false;
+            console.log("Hand-Cam AR passthrough active — skipping page reload");
+            return;
+        }
         // Reload the page to return to initial state
         window.location.reload();
     });
@@ -255,10 +260,8 @@ export function render(timestamp, frame) {
     // ── AR mode flag ─────────────────────────────────────────────────────────
     isARMode = renderer.xr.isPresenting;
 
-    // ── Hand tracking update (every XR frame) ────────────────────────────────
-    if (frame) {
-        updateHands(frame);
-    }
+    // ── Hand tracking update (every frame: supports both WebXR XRHand and MediaPipe Hand Cam) ──
+    updateHands(frame);
     // Handle screen placement or movement with controller
     if ((isPlacingScreen && newScreen) || (isMovingScreen && selectedScreen)) {
         const target = isPlacingScreen ? newScreen : selectedScreen;

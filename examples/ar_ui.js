@@ -16,13 +16,8 @@ export let isResizeModeActive = false;
 export function createNotification(message, type = 'info') {
     console.log(`Notification (${type}): ${message}`);
     
-    // Create DOM notification
+    // Create DOM notification only (3D floating space popups removed to keep AR space clean)
     createDOMNotification(message, type);
-    
-    // Create 3D notification if renderer is available
-    if (renderer && camera) {
-        create3DNotification(message, type);
-    }
 }
 
 // Alias for backward compatibility

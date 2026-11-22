@@ -266,7 +266,7 @@ function handleButtonAction(button) {
                 controlPanel.visible = false;
                 controlPanel.position.set(0, -9999, 0);
                 const btn = document.getElementById('summonPanelBtn');
-                if (btn) btn.innerHTML = '<span style="font-size: 20px;">🖐️</span><span>Menu</span>';
+                if (btn) btn.innerHTML = '<span style="font-size: 15px;">🖐️</span><span>Menu</span>';
             }
             break;
 
@@ -326,7 +326,7 @@ function handleButtonAction(button) {
                 controlPanel.visible = false;
                 controlPanel.position.set(0, -9999, 0);
                 const btn = document.getElementById('summonPanelBtn');
-                if (btn) btn.innerHTML = '<span style="font-size: 20px;">🖐️</span><span>Menu</span>';
+                if (btn) btn.innerHTML = '<span style="font-size: 15px;">🖐️</span><span>Menu</span>';
             }
 
             // Add visual feedback
@@ -1211,76 +1211,9 @@ function updateVideoTime(progress) {
     // Keeping the function to maintain code structure in case we need to reimplement
 }
 
-// Create a floating text indicator for mode changes
+// Create a floating text indicator for mode changes (uses DOM notification instead of 3D space popup)
 function createModeChangeIndicator(message) {
-    // Create a canvas for the text
-    const canvas = document.createElement('canvas');
-    canvas.width = 256;
-    canvas.height = 64;
-    const ctx = canvas.getContext('2d');
-
-    // Draw the text
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.strokeStyle = 'rgba(50, 150, 255, 0.8)';
-    ctx.lineWidth = 4;
-    ctx.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
-
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '24px Arial';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(message, canvas.width / 2, canvas.height / 2);
-
-    // Create texture
-    const texture = new THREE.CanvasTexture(canvas);
-    const geometry = new THREE.PlaneGeometry(0.3, 0.075);
-    const material = new THREE.MeshBasicMaterial({
-        map: texture,
-        transparent: true,
-        opacity: 0.9,
-        side: THREE.DoubleSide
-    });
-
-    const indicator = new THREE.Mesh(geometry, material);
-
-    // Position above the control panel
-    const cameraDirection = new THREE.Vector3(0, 0, -1);
-    cameraDirection.applyQuaternion(camera.quaternion);
-
-    indicator.position.copy(camera.position).add(cameraDirection.multiplyScalar(-0.5));
-    indicator.position.y += 0.15; // Position above control panel
-    indicator.quaternion.copy(camera.quaternion);
-
-    scene.add(indicator);
-
-    // Fade out and remove
-    const startTime = performance.now();
-    const duration = 1500; // 1.5 seconds
-
-    function fadeOut() {
-        const elapsed = performance.now() - startTime;
-        const progress = elapsed / duration;
-
-        if (progress < 1) {
-            if (progress > 0.7) {
-                // Start fading out in the last 30% of time
-                material.opacity = 0.9 * (1 - ((progress - 0.7) / 0.3));
-            }
-
-            // Float upward slightly
-            indicator.position.y += 0.0002;
-
-            requestAnimationFrame(fadeOut);
-        } else {
-            scene.remove(indicator);
-            material.dispose();
-            geometry.dispose();
-            texture.dispose();
-        }
-    }
-
-    requestAnimationFrame(fadeOut);
+    showNotification(message, 'info');
 }
 
 // Helper function to find a screen from a drag handle

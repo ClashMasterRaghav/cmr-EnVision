@@ -201,7 +201,7 @@ if (typeof window !== 'undefined') {
                 controlPanel.visible = false;
                 controlPanel.position.set(0, -9999, 0);
                 const btn = document.getElementById('summonPanelBtn');
-                if (btn) btn.innerHTML = '<span style="font-size: 20px;">🖐️</span><span>Menu</span>';
+                if (btn) btn.innerHTML = '<span style="font-size: 15px;">🖐️</span><span>Menu</span>';
             }
         } else if (event.data.action === 'dragStart') {
             const sId = event.data.screenId;
@@ -1621,7 +1621,7 @@ export function createScreenFromButton(screenType, position) {
         controlPanel.visible = false;
         controlPanel.position.set(0, -9999, 0);
         const btn = document.getElementById('summonPanelBtn');
-        if (btn) btn.innerHTML = '<span style="font-size: 20px;">🖐️</span><span>Menu</span>';
+        if (btn) btn.innerHTML = '<span style="font-size: 15px;">🖐️</span><span>Menu</span>';
     }
 
     // Default position is in front of the camera
